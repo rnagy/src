@@ -49,7 +49,7 @@ extern uint32_t			mpi_debug;
  * this is the max number of sge's we can stuff in a request frame:
  * sizeof(scsi_io) + sizeof(sense) + sizeof(sge) * 32 = MPI_REQUEST_SIZE
  */
-#define MPI_MAX_SGL		36
+#define MPI_MAX_SGL		512
 
 struct mpi_dmamem {
 	bus_dmamap_t		mdm_map;

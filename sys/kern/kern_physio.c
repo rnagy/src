@@ -129,7 +129,9 @@ physio(void (*strategy)(struct buf *), dev_t dev, int flags,
 			(*minphys)(bp);
 			todo = bp->b_bcount;
 			KASSERTMSG(todo >= 0, "minphys broken");
+#if 0
 			KASSERTMSG(todo <= MAXPHYS, "minphys broken");
+#endif
 
 			/*
 			 * [lock the part of the user address space involved

@@ -142,6 +142,8 @@ int			ahci_pmp_phy_status(struct ahci_port *, int,
 			    u_int32_t *);
 int 			ahci_pmp_identify(struct ahci_port *, int *);
 
+void			ahci_minphys(struct buf *, struct scsi_link *);
+
 
 /* Wait for all bits in _b to be cleared */
 #define ahci_pwait_clr(_ap, _r, _b, _n) \
@@ -310,7 +312,7 @@ noccc:
 	memset(&aaa, 0, sizeof(aaa));
 	aaa.aaa_cookie = sc;
 	aaa.aaa_methods = &ahci_atascsi_methods;
-	aaa.aaa_minphys = NULL;
+	aaa.aaa_minphys = ahci_minphys;
 	aaa.aaa_nports = AHCI_MAX_PORTS;
 	aaa.aaa_ncmds = sc->sc_ncmds - 1;
 	if (!(sc->sc_flags & AHCI_F_NO_NCQ) &&
@@ -598,7 +600,8 @@ nomem:
 	for (i = 0; i < sc->sc_ncmds; i++) {
 		ccb = &ap->ap_ccbs[i];
 
-		if (bus_dmamap_create(sc->sc_dmat, MAXPHYS, AHCI_MAX_PRDT,
+		if (bus_dmamap_create(sc->sc_dmat,
+		    (AHCI_MAX_PRDT * PAGE_SIZE * sc->sc_ncmds), AHCI_MAX_PRDT,
 		    (4 * 1024 * 1024), 0, BUS_DMA_NOWAIT | BUS_DMA_ALLOCNOW,
 		    &ccb->ccb_dmamap) != 0) {
 			printf("%s: unable to create dmamap for port %d "
@@ -3435,3 +3438,13 @@ ahci_hibernate_io(dev_t dev, daddr_t blkno, vaddr_t addr, size_t size,
 }
 
 #endif
+
+void
+ahci_minphys(struct buf *bp, struct scsi_link *link)
+{
+	struct ahci_softc *sc = link->device_softc;
+	unsigned int maxio = (AHCI_MAX_PRDT * PAGE_SIZE * sc->sc_ncmds);
+
+	if (bp->b_bcount > maxio)
+		bp->b_bcount = maxio;
+}

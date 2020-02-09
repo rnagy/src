@@ -1063,8 +1063,8 @@ mpi_alloc_ccbs(struct mpi_softc *sc)
 	for (i = 0; i < sc->sc_maxcmds; i++) {
 		ccb = &sc->sc_ccbs[i];
 
-		if (bus_dmamap_create(sc->sc_dmat, MAXPHYS,
-		    sc->sc_max_sgl_len, MAXPHYS, 0,
+		if (bus_dmamap_create(sc->sc_dmat, (sc->sc_max_sgl_len * MAXPHYS),
+		    sc->sc_max_sgl_len, (sc->sc_max_sgl_len * MAXPHYS), 0,
 		    BUS_DMA_NOWAIT | BUS_DMA_ALLOCNOW,
 		    &ccb->ccb_dmamap) != 0) {
 			printf("%s: unable to create dma map\n", DEVNAME(sc));
@@ -1601,11 +1601,13 @@ mpi_load_xs(struct mpi_ccb *ccb)
 }
 
 void
-mpi_minphys(struct buf *bp, struct scsi_link *sl)
+mpi_minphys(struct buf *bp, struct scsi_link *link)
 {
-	/* XXX */
-	if (bp->b_bcount > MAXPHYS)
-		bp->b_bcount = MAXPHYS;
+	struct mpi_softc		*sc = link->adapter_softc;
+	unsigned int			maxio = (sc->sc_max_sgl_len * MAXPHYS);
+
+	if (bp->b_bcount > maxio)
+		bp->b_bcount = maxio;
 }
 
 int

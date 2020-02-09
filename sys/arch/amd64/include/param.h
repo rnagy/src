@@ -77,7 +77,7 @@
  * Maximum size of the kernel malloc arena in PAGE_SIZE-sized
  * logical pages.
  */
-#define	NKMEMPAGES_MAX_DEFAULT	((128 * 1024 * 1024) >> PAGE_SHIFT)
+#define	NKMEMPAGES_MAX_DEFAULT	((1024 * 1024 * 1024) >> PAGE_SHIFT)
 
 #define __HAVE_ACPI
 

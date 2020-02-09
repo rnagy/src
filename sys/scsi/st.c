@@ -1010,8 +1010,8 @@ stminphys(struct buf *bp)
 
 	if (link->adapter->dev_minphys != NULL)
 		(*link->adapter->dev_minphys)(bp, link);
-
-	minphys(bp);
+	else
+		minphys(bp);
 
 	device_unref(&sc->sc_dev);
 }

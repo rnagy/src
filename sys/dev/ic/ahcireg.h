@@ -279,7 +279,7 @@ struct ahci_prdt {
 } __packed __aligned(8);
 
 /* this makes ahci_cmd_table 512 bytes, supporting 128-byte alignment */
-#define AHCI_MAX_PRDT		24
+#define AHCI_MAX_PRDT		136
 
 struct ahci_cmd_table {
 	u_int8_t		cfis[64];	/* Command FIS */
