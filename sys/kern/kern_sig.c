@@ -1,4 +1,4 @@
-/*	$OpenBSD: kern_sig.c,v 1.245 2020/02/01 15:52:34 anton Exp $	*/
+/*	$OpenBSD: kern_sig.c,v 1.249 2020/02/20 16:56:52 visa Exp $	*/
 /*	$NetBSD: kern_sig.c,v 1.54 1996/04/22 01:38:32 christos Exp $	*/
 
 /*
@@ -77,7 +77,7 @@ void	filt_sigdetach(struct knote *kn);
 int	filt_signal(struct knote *kn, long hint);
 
 const struct filterops sig_filtops = {
-	.f_isfd		= 0,
+	.f_flags	= 0,
 	.f_attach	= filt_sigattach,
 	.f_detach	= filt_sigdetach,
 	.f_event	= filt_signal,
@@ -85,7 +85,7 @@ const struct filterops sig_filtops = {
 
 void proc_stop(struct proc *p, int);
 void proc_stop_sweep(void *);
-struct timeout proc_stop_to;
+void *proc_stop_si;
 
 void postsig(struct proc *, int);
 int cansignal(struct proc *, struct process *, int);
@@ -158,7 +158,10 @@ cansignal(struct proc *p, struct process *qr, int signum)
 void
 signal_init(void)
 {
-	timeout_set(&proc_stop_to, proc_stop_sweep, NULL);
+	proc_stop_si = softintr_establish(IPL_SOFTCLOCK, proc_stop_sweep,
+	    NULL);
+	if (proc_stop_si == NULL)
+		panic("signal_init failed to register softintr");
 
 	pool_init(&sigacts_pool, sizeof(struct sigacts), 0, IPL_NONE,
 	    PR_WAITOK, "sigapl", NULL);
@@ -434,7 +437,7 @@ execsigs(struct proc *p)
 	 * Clear set of signals caught on the signal stack.
 	 */
 	sigstkinit(&p->p_sigstk);
-	ps->ps_flags &= ~SAS_NOCLDWAIT;
+	atomic_clearbits_int(&ps->ps_flags, SAS_NOCLDWAIT);
 	if (ps->ps_sigact[SIGCHLD] == SIG_IGN)
 		ps->ps_sigact[SIGCHLD] = SIG_DFL;
 }
@@ -740,6 +743,7 @@ pgsigio(struct sigio_ref *sir, int sig, int checkctty)
 	if (sir->sir_sigio == NULL)
 		return;
 
+	KERNEL_LOCK();
 	mtx_enter(&sigio_lock);
 	sigio = sir->sir_sigio;
 	if (sigio == NULL)
@@ -756,6 +760,7 @@ pgsigio(struct sigio_ref *sir, int sig, int checkctty)
 	}
 out:
 	mtx_leave(&sigio_lock);
+	KERNEL_UNLOCK();
 }
 
 /*
@@ -1316,7 +1321,6 @@ void
 proc_stop(struct proc *p, int sw)
 {
 	struct process *pr = p->p_p;
-	extern void *softclock_si;
 
 #ifdef MULTIPROCESSOR
 	SCHED_ASSERT_LOCKED();
@@ -1326,20 +1330,18 @@ proc_stop(struct proc *p, int sw)
 	atomic_clearbits_int(&pr->ps_flags, PS_WAITED);
 	atomic_setbits_int(&pr->ps_flags, PS_STOPPED);
 	atomic_setbits_int(&p->p_flag, P_SUSPSIG);
-	if (!timeout_pending(&proc_stop_to)) {
-		timeout_add(&proc_stop_to, 0);
-		/*
-		 * We need this soft interrupt to be handled fast.
-		 * Extra calls to softclock don't hurt.
-		 */
-                softintr_schedule(softclock_si);
-	}
+	/*
+	 * We need this soft interrupt to be handled fast.
+	 * Extra calls to softclock don't hurt.
+	 */
+	softintr_schedule(proc_stop_si);
 	if (sw)
 		mi_switch();
 }
 
 /*
- * Called from a timeout to send signals to the parents of stopped processes.
+ * Called from a soft interrupt to send signals to the parents of stopped
+ * processes.
  * We can't do this in proc_stop because it's called with nasty locks held
  * and we would need recursive scheduler lock to deal with that.
  */
@@ -1510,7 +1512,7 @@ coredump(struct proc *p)
 	if (pr->ps_emul->e_coredump == NULL)
 		return (EINVAL);
 
-	pr->ps_flags |= PS_COREDUMP;
+	atomic_setbits_int(&pr->ps_flags, PS_COREDUMP);
 
 	/* Don't dump if will exceed file size limit. */
 	if (USPACE + ptoa(vm->vm_dsize + vm->vm_ssize) >= lim_cur(RLIMIT_CORE))

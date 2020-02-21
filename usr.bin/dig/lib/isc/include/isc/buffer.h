@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: buffer.h,v 1.1 2020/02/07 09:58:54 florian Exp $ */
+/* $Id: buffer.h,v 1.6 2020/02/18 18:11:27 florian Exp $ */
 
 #ifndef ISC_BUFFER_H
 #define ISC_BUFFER_H 1
@@ -108,9 +108,6 @@
 
 #include <inttypes.h>
 
-#include <isc/formatcheck.h>
-#include <isc/lang.h>
-#include <isc/magic.h>
 #include <isc/types.h>
 
 /*!
@@ -118,16 +115,6 @@
  * If it is undefined, a function will be used.
  */
 /* #define ISC_BUFFER_USEINLINE */
-
-ISC_LANG_BEGINDECLS
-
-/*@{*/
-/*!
- *** Magic numbers
- ***/
-#define ISC_BUFFER_MAGIC		0x42756621U	/* Buf!. */
-#define ISC_BUFFER_VALID(b)		ISC_MAGIC_VALID(b, ISC_BUFFER_MAGIC)
-/*@}*/
 
 /*
  * The following macros MUST be used only on valid buffers.  It is the
@@ -168,7 +155,6 @@ ISC_LANG_BEGINDECLS
  */
 
 struct isc_buffer {
-	unsigned int		magic;
 	void		       *base;
 	/*@{*/
 	/*! The following integers are byte offsets from 'base'. */
@@ -239,20 +225,6 @@ void
 isc__buffer_initnull(isc_buffer_t *b);
 /*!<
  *\brief Initialize a buffer 'b' with a null data and zero length/
- */
-
-void
-isc_buffer_reinit(isc_buffer_t *b, void *base, unsigned int length);
-/*!<
- * \brief Make 'b' refer to the 'length'-byte region starting at base.
- * Any existing data will be copied.
- *
- * Requires:
- *
- *\li	'length' > 0 AND length >= previous length
- *
- *\li	'base' is a pointer to a sequence of 'length' bytes.
- *
  */
 
 void
@@ -560,27 +532,6 @@ isc__buffer_putuint32(isc_buffer_t *b, uint32_t val);
  *\li	The used pointer in 'b' is advanced by 4.
  */
 
-uint64_t
-isc_buffer_getuint48(isc_buffer_t *b);
-/*!<
- * \brief Read an unsigned 48-bit integer in network byte order from 'b',
- * convert it to host byte order, and return it.
- *
- * Requires:
- *
- *\li	'b' is a valid buffer.
- *
- *\li	The length of the available region of 'b' is at least 6.
- *
- * Ensures:
- *
- *\li	The current pointer in 'b' is advanced by 6.
- *
- * Returns:
- *
- *\li	A 48-bit unsigned integer (stored in a 64-bit integer).
- */
-
 void
 isc__buffer_putuint48(isc_buffer_t *b, uint64_t val);
 /*!<
@@ -654,8 +605,6 @@ isc_buffer_copyregion(isc_buffer_t *b, const isc_region_t *r);
  *					big enough.
  */
 
-ISC_LANG_ENDDECLS
-
 /*
  * Inline macro versions of the functions.  These should never be called
  * directly by an application, but will be used by the functions within
@@ -688,14 +637,12 @@ ISC_LANG_ENDDECLS
 		(_b)->current = 0; \
 		(_b)->active = 0; \
 		ISC_LINK_INIT(_b, link); \
-		(_b)->magic = ISC_BUFFER_MAGIC; \
 	} while (0)
 
 #define ISC__BUFFER_INITNULL(_b) ISC__BUFFER_INIT(_b, NULL, 0)
 
 #define ISC__BUFFER_INVALIDATE(_b) \
 	do { \
-		(_b)->magic = 0; \
 		(_b)->base = NULL; \
 		(_b)->length = 0; \
 		(_b)->used = 0; \
@@ -890,13 +837,6 @@ ISC_LANG_ENDDECLS
 #define isc_buffer_putuint24		isc__buffer_putuint24
 #define isc_buffer_putuint32		isc__buffer_putuint32
 #endif
-
-#define isc_buffer_constinit(_b, _d, _l) \
-	do { \
-		union { void *_var; const void *_const; } _deconst; \
-		_deconst._const = (_d); \
-		isc_buffer_init((_b), _deconst._var, (_l)); \
-	} while (0)
 
 /*
  * No inline method for this one (yet).

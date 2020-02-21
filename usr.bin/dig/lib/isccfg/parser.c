@@ -20,14 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <isc/buffer.h>
-#include <isc/formatcheck.h>
+
 #include <isc/lex.h>
 #include <isc/log.h>
-#include <isc/net.h>
-#include <isc/netaddr.h>
-#include <isc/netscope.h>
-#include <isc/sockaddr.h>
 #include <isc/symtab.h>
 #include <isc/util.h>
 
@@ -71,7 +66,6 @@ cfg_rep_t cfg_rep_string;
 cfg_rep_t cfg_rep_list;
 
 cfg_type_t cfg_type_qstring;
-cfg_type_t cfg_type_ustring;
 cfg_type_t cfg_type_sstring;
 cfg_type_t cfg_type_token;
 cfg_type_t cfg_type_unsupported;
@@ -120,7 +114,7 @@ cfg_parse_obj(cfg_parser_t *pctx, const cfg_type_t *type, cfg_obj_t **ret);
 
 static void
 cfg_parser_error(cfg_parser_t *pctx, unsigned int flags,
-		 const char *fmt, ...) ISC_FORMAT_PRINTF(3, 4);
+		 const char *fmt, ...) __attribute__((__format__(__printf__, 3, 4)));
 
 static void
 free_list(cfg_parser_t *pctx, cfg_obj_t *obj);
@@ -424,7 +418,7 @@ create_string(cfg_parser_t *pctx, const char *contents, const cfg_type_t *type,
 	len = strlen(contents);
 	obj->value.string.length = len;
 	obj->value.string.base = malloc(len + 1);
-	if (obj->value.string.base == 0) {
+	if (obj->value.string.base == NULL) {
 		free(obj);
 		return (ISC_R_NOMEMORY);
 	}
@@ -452,25 +446,6 @@ cfg_parse_qstring(cfg_parser_t *pctx, const cfg_type_t *type, cfg_obj_t **ret) {
 	}
 	return (create_string(pctx, TOKEN_STRING(pctx),
 			      &cfg_type_qstring, ret));
- cleanup:
-	return (result);
-}
-
-static isc_result_t
-parse_ustring(cfg_parser_t *pctx, const cfg_type_t *type, cfg_obj_t **ret) {
-	isc_result_t result;
-
-	UNUSED(type);
-
-	CHECK(cfg_gettoken(pctx, 0));
-	if (pctx->token.type != isc_tokentype_string) {
-		cfg_parser_error(pctx, CFG_LOG_NEAR, "expected unquoted string");
-		return (ISC_R_UNEXPECTEDTOKEN);
-	}
-	return (create_string(pctx,
-			      TOKEN_STRING(pctx),
-			      &cfg_type_ustring,
-			      ret));
  cleanup:
 	return (result);
 }
@@ -521,12 +496,6 @@ free_string(cfg_parser_t *pctx, cfg_obj_t *obj) {
 	free(obj->value.string.base);
 }
 
-isc_boolean_t
-cfg_obj_isstring(const cfg_obj_t *obj) {
-	REQUIRE(obj != NULL);
-	return (ISC_TF(obj->type->rep == &cfg_rep_string));
-}
-
 const char *
 cfg_obj_asstring(const cfg_obj_t *obj) {
 	REQUIRE(obj != NULL && obj->type->rep == &cfg_rep_string);
@@ -536,11 +505,6 @@ cfg_obj_asstring(const cfg_obj_t *obj) {
 /* Quoted string only */
 cfg_type_t cfg_type_qstring = {
 	"quoted_string", cfg_parse_qstring, &cfg_rep_string, NULL
-};
-
-/* Unquoted string only */
-cfg_type_t cfg_type_ustring = {
-	"string", parse_ustring, &cfg_rep_string, NULL
 };
 
 /* Any string (quoted or unquoted); printed with quotes */

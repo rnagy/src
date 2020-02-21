@@ -22,40 +22,6 @@
 #define RRTYPE_TXT_ATTRIBUTES (0)
 
 static inline isc_result_t
-generic_fromtext_txt(ARGS_FROMTEXT) {
-	isc_token_t token;
-	int strings;
-
-	UNUSED(type);
-	UNUSED(rdclass);
-	UNUSED(origin);
-	UNUSED(options);
-	UNUSED(callbacks);
-
-	strings = 0;
-	if ((options & DNS_RDATA_UNKNOWNESCAPE) != 0) {
-		isc_textregion_t r;
-		DE_CONST("#", r.base);
-		r.length = 1;
-		RETERR(txt_fromtext(&r, target));
-		strings++;
-	}
-	for (;;) {
-		RETERR(isc_lex_getmastertoken(lexer, &token,
-					      isc_tokentype_qstring,
-					      ISC_TRUE));
-		if (token.type != isc_tokentype_qstring &&
-		    token.type != isc_tokentype_string)
-			break;
-		RETTOK(txt_fromtext(&token.value.as_textregion, target));
-		strings++;
-	}
-	/* Let upper layer handle eol/eof. */
-	isc_lex_ungettoken(lexer, &token);
-	return (strings == 0 ? ISC_R_UNEXPECTEDEND : ISC_R_SUCCESS);
-}
-
-static inline isc_result_t
 generic_totext_txt(ARGS_TOTEXT) {
 	isc_region_t region;
 
@@ -87,15 +53,6 @@ generic_fromwire_txt(ARGS_FROMWIRE) {
 			return (result);
 	} while (!buffer_empty(source));
 	return (ISC_R_SUCCESS);
-}
-
-static inline isc_result_t
-fromtext_txt(ARGS_FROMTEXT) {
-
-	REQUIRE(type == dns_rdatatype_txt);
-
-	return (generic_fromtext_txt(rdclass, type, lexer, origin, options,
-				     target, callbacks));
 }
 
 static inline isc_result_t
@@ -280,83 +237,4 @@ casecompare_txt(ARGS_COMPARE) {
 	return (compare_txt(rdata1, rdata2));
 }
 
-static isc_result_t
-generic_txt_first(dns_rdata_txt_t *txt) {
-
-	REQUIRE(txt != NULL);
-	REQUIRE(txt->txt != NULL || txt->txt_len == 0);
-
-	if (txt->txt_len == 0)
-		return (ISC_R_NOMORE);
-
-	txt->offset = 0;
-	return (ISC_R_SUCCESS);
-}
-
-static isc_result_t
-generic_txt_next(dns_rdata_txt_t *txt) {
-	isc_region_t r;
-	uint8_t length;
-
-	REQUIRE(txt != NULL);
-	REQUIRE(txt->txt != NULL && txt->txt_len != 0);
-
-	INSIST(txt->offset + 1 <= txt->txt_len);
-	r.base = txt->txt + txt->offset;
-	r.length = txt->txt_len - txt->offset;
-	length = uint8_fromregion(&r);
-	INSIST(txt->offset + 1 + length <= txt->txt_len);
-	txt->offset = txt->offset + 1 + length;
-	if (txt->offset == txt->txt_len)
-		return (ISC_R_NOMORE);
-	return (ISC_R_SUCCESS);
-}
-
-static isc_result_t
-generic_txt_current(dns_rdata_txt_t *txt, dns_rdata_txt_string_t *string) {
-	isc_region_t r;
-
-	REQUIRE(txt != NULL);
-	REQUIRE(string != NULL);
-	REQUIRE(txt->txt != NULL);
-	REQUIRE(txt->offset < txt->txt_len);
-
-	INSIST(txt->offset + 1 <= txt->txt_len);
-	r.base = txt->txt + txt->offset;
-	r.length = txt->txt_len - txt->offset;
-
-	string->length = uint8_fromregion(&r);
-	isc_region_consume(&r, 1);
-	string->data = r.base;
-	INSIST(txt->offset + 1 + string->length <= txt->txt_len);
-
-	return (ISC_R_SUCCESS);
-}
-
-isc_result_t
-dns_rdata_txt_first(dns_rdata_txt_t *txt) {
-
-	REQUIRE(txt != NULL);
-	REQUIRE(txt->common.rdtype == dns_rdatatype_txt);
-
-	return (generic_txt_first(txt));
-}
-
-isc_result_t
-dns_rdata_txt_next(dns_rdata_txt_t *txt) {
-
-	REQUIRE(txt != NULL);
-	REQUIRE(txt->common.rdtype == dns_rdatatype_txt);
-
-	return (generic_txt_next(txt));
-}
-
-isc_result_t
-dns_rdata_txt_current(dns_rdata_txt_t *txt, dns_rdata_txt_string_t *string) {
-
-	REQUIRE(txt != NULL);
-	REQUIRE(txt->common.rdtype == dns_rdatatype_txt);
-
-	return (generic_txt_current(txt, string));
-}
 #endif	/* RDATA_GENERIC_TXT_16_C */

@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: apl_42.c,v 1.1 2020/02/07 09:58:53 florian Exp $ */
+/* $Id: apl_42.c,v 1.3 2020/02/20 18:08:51 florian Exp $ */
 
 /* RFC3123 */
 
@@ -22,89 +22,6 @@
 #define RDATA_IN_1_APL_42_C
 
 #define RRTYPE_APL_ATTRIBUTES (0)
-
-static inline isc_result_t
-fromtext_in_apl(ARGS_FROMTEXT) {
-	isc_token_t token;
-	unsigned char addr[16];
-	unsigned long afi;
-	uint8_t prefix;
-	uint8_t len;
-	isc_boolean_t neg;
-	char *cp, *ap, *slash;
-	int n;
-
-	REQUIRE(type == dns_rdatatype_apl);
-	REQUIRE(rdclass == dns_rdataclass_in);
-
-	UNUSED(type);
-	UNUSED(rdclass);
-	UNUSED(origin);
-	UNUSED(options);
-	UNUSED(callbacks);
-
-	do {
-		RETERR(isc_lex_getmastertoken(lexer, &token,
-					      isc_tokentype_string, ISC_TRUE));
-		if (token.type != isc_tokentype_string)
-			break;
-
-		cp = DNS_AS_STR(token);
-		neg = ISC_TF(*cp == '!');
-		if (neg)
-			cp++;
-		afi = strtoul(cp, &ap, 10);
-		if (*ap++ != ':' || cp == ap)
-			RETTOK(DNS_R_SYNTAX);
-		if (afi > 0xffffU)
-			RETTOK(ISC_R_RANGE);
-		slash = strchr(ap, '/');
-		if (slash == NULL || slash == ap)
-			RETTOK(DNS_R_SYNTAX);
-		RETTOK(isc_parse_uint8(&prefix, slash + 1, 10));
-		switch (afi) {
-		case 1:
-			*slash = '\0';
-			n = inet_pton(AF_INET, ap, addr);
-			*slash = '/';
-			if (n != 1)
-				RETTOK(DNS_R_BADDOTTEDQUAD);
-			if (prefix > 32)
-				RETTOK(ISC_R_RANGE);
-			for (len = 4; len > 0; len--)
-				if (addr[len - 1] != 0)
-					break;
-			break;
-
-		case 2:
-			*slash = '\0';
-			n = inet_pton(AF_INET6, ap, addr);
-			*slash = '/';
-			if (n != 1)
-				RETTOK(DNS_R_BADAAAA);
-			if (prefix > 128)
-				RETTOK(ISC_R_RANGE);
-			for (len = 16; len > 0; len--)
-				if (addr[len - 1] != 0)
-					break;
-			break;
-
-		default:
-			RETTOK(ISC_R_NOTIMPLEMENTED);
-		}
-		RETERR(uint16_tobuffer(afi, target));
-		RETERR(uint8_tobuffer(prefix, target));
-		RETERR(uint8_tobuffer(len | ((neg) ? 0x80 : 0), target));
-		RETERR(mem_tobuffer(target, addr, len));
-	} while (1);
-
-	/*
-	 * Let upper layer handle eol/eof.
-	 */
-	isc_lex_ungettoken(lexer, &token);
-
-	return (ISC_R_SUCCESS);
-}
 
 static inline isc_result_t
 totext_in_apl(ARGS_TOTEXT) {
@@ -297,101 +214,6 @@ freestruct_in_apl(ARGS_FREESTRUCT) {
 
 	if (apl->apl != NULL)
 		free(apl->apl);
-}
-
-isc_result_t
-dns_rdata_apl_first(dns_rdata_in_apl_t *apl) {
-	uint32_t length;
-
-	REQUIRE(apl != NULL);
-	REQUIRE(apl->common.rdtype == dns_rdatatype_apl);
-	REQUIRE(apl->common.rdclass == dns_rdataclass_in);
-	REQUIRE(apl->apl != NULL || apl->apl_len == 0);
-
-	/*
-	 * If no APL return ISC_R_NOMORE.
-	 */
-	if (apl->apl == NULL)
-		return (ISC_R_NOMORE);
-
-	/*
-	 * Sanity check data.
-	 */
-	INSIST(apl->apl_len > 3U);
-	length = apl->apl[apl->offset + 3] & 0x7f;
-	INSIST(length <= apl->apl_len);
-
-	apl->offset = 0;
-	return (ISC_R_SUCCESS);
-}
-
-isc_result_t
-dns_rdata_apl_next(dns_rdata_in_apl_t *apl) {
-	uint32_t length;
-
-	REQUIRE(apl != NULL);
-	REQUIRE(apl->common.rdtype == dns_rdatatype_apl);
-	REQUIRE(apl->common.rdclass == dns_rdataclass_in);
-	REQUIRE(apl->apl != NULL || apl->apl_len == 0);
-
-	/*
-	 * No APL or have already reached the end return ISC_R_NOMORE.
-	 */
-	if (apl->apl == NULL || apl->offset == apl->apl_len)
-		return (ISC_R_NOMORE);
-
-	/*
-	 * Sanity check data.
-	 */
-	INSIST(apl->offset < apl->apl_len);
-	INSIST(apl->apl_len > 3U);
-	INSIST(apl->offset <= apl->apl_len - 4U);
-	length = apl->apl[apl->offset + 3] & 0x7f;
-	/*
-	 * 16 to 32 bits promotion as 'length' is 32 bits so there is
-	 * no overflow problems.
-	 */
-	INSIST(length + apl->offset <= apl->apl_len);
-
-	apl->offset += apl->apl[apl->offset + 3] & 0x7f;
-	return ((apl->offset >= apl->apl_len) ? ISC_R_SUCCESS : ISC_R_NOMORE);
-}
-
-isc_result_t
-dns_rdata_apl_current(dns_rdata_in_apl_t *apl, dns_rdata_apl_ent_t *ent) {
-	uint32_t length;
-
-	REQUIRE(apl != NULL);
-	REQUIRE(apl->common.rdtype == dns_rdatatype_apl);
-	REQUIRE(apl->common.rdclass == dns_rdataclass_in);
-	REQUIRE(ent != NULL);
-	REQUIRE(apl->apl != NULL || apl->apl_len == 0);
-	REQUIRE(apl->offset <= apl->apl_len);
-
-	if (apl->offset == apl->apl_len)
-		return (ISC_R_NOMORE);
-
-	/*
-	 * Sanity check data.
-	 */
-	INSIST(apl->apl_len > 3U);
-	INSIST(apl->offset <= apl->apl_len - 4U);
-	length = apl->apl[apl->offset + 3] & 0x7f;
-	/*
-	 * 16 to 32 bits promotion as 'length' is 32 bits so there is
-	 * no overflow problems.
-	 */
-	INSIST(length + apl->offset <= apl->apl_len);
-
-	ent->family = (apl->apl[apl->offset] << 8) + apl->apl[apl->offset + 1];
-	ent->prefix = apl->apl[apl->offset + 2];
-	ent->length = apl->apl[apl->offset + 3] & 0x7f;
-	ent->negative = ISC_TF((apl->apl[apl->offset + 3] & 0x80) != 0);
-	if (ent->length != 0)
-		ent->data = &apl->apl[apl->offset + 4];
-	else
-		ent->data = NULL;
-	return (ISC_R_SUCCESS);
 }
 
 static inline isc_result_t

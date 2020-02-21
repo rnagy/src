@@ -33,18 +33,15 @@
 
 /*%
  * Principal Author: Brian Wellington
- * $Id: dst_parse.c,v 1.1 2020/02/07 09:58:52 florian Exp $
+ * $Id: dst_parse.c,v 1.4 2020/02/13 12:03:51 jsg Exp $
  */
 
 
 
 #include <isc/base64.h>
 #include <isc/lex.h>
-#include <isc/stdtime.h>
 #include <string.h>
 #include <isc/util.h>
-#include <dns/time.h>
-#include <dns/log.h>
 
 #include "dst_internal.h"
 #include "dst_parse.h"
@@ -195,7 +192,6 @@ dst__privstruct_parse(dst_key_t *key, unsigned int alg, isc_lex_t *lex,
 	isc_token_t token;
 	unsigned char *data = NULL;
 	unsigned int opt = ISC_LEXOPT_EOL;
-	isc_stdtime_t when;
 	isc_result_t ret;
 	isc_boolean_t external = ISC_FALSE;
 
@@ -248,11 +244,6 @@ dst__privstruct_parse(dst_key_t *key, unsigned int alg, isc_lex_t *lex,
 		ret = DST_R_INVALIDPRIVATEKEY;
 		goto fail;
 	}
-
-	/*
-	 * Store the private key format version number
-	 */
-	dst_key_setprivateformat(key, major, minor);
 
 	READLINE(lex, opt, &token);
 
@@ -311,8 +302,6 @@ dst__privstruct_parse(dst_key_t *key, unsigned int alg, isc_lex_t *lex,
 				ret = DST_R_INVALIDPRIVATEKEY;
 				goto fail;
 			}
-
-			dst_key_setnum(key, tag, token.value.as_ulong);
 			goto next;
 		}
 
@@ -326,12 +315,6 @@ dst__privstruct_parse(dst_key_t *key, unsigned int alg, isc_lex_t *lex,
 				ret = DST_R_INVALIDPRIVATEKEY;
 				goto fail;
 			}
-
-			ret = dns_time32_fromtext(DST_AS_STR(token), &when);
-			if (ret != ISC_R_SUCCESS)
-				goto fail;
-
-			dst_key_settime(key, tag, when);
 
 			goto next;
 		}

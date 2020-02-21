@@ -645,8 +645,6 @@ main(int argc, char **argv) {
 
 		fputs("\n\n", stdout);
 
-		doswitch("FROMTEXTSWITCH", "fromtext", FROMTEXTARGS,
-			 FROMTEXTTYPE, FROMTEXTCLASS, FROMTEXTDEF);
 		doswitch("TOTEXTSWITCH", "totext", TOTEXTARGS,
 			 TOTEXTTYPE, TOTEXTCLASS, TOTEXTDEF);
 		doswitch("FROMWIRESWITCH", "fromwire", FROMWIREARGS,
@@ -681,10 +679,6 @@ main(int argc, char **argv) {
 		 * attributes.
 		 */
 
-#define PRINT_COMMA(x) (x == maxtype ? "" : ",")
-
-#define METANOTQUESTION  "DNS_RDATATYPEATTR_META | " \
-			 "DNS_RDATATYPEATTR_NOTQUESTION"
 #define METAQUESTIONONLY "DNS_RDATATYPEATTR_META | " \
 			 "DNS_RDATATYPEATTR_QUESTIONONLY"
 #define RESERVED "DNS_RDATATYPEATTR_RESERVED"

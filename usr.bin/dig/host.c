@@ -25,11 +25,8 @@
 #include <unistd.h>
 
 #include <isc/app.h>
-#include <isc/netaddr.h>
 #include <isc/util.h>
-#include <isc/task.h>
 
-#include <dns/byaddr.h>
 #include <dns/fixedname.h>
 #include <dns/message.h>
 #include <dns/name.h>
@@ -146,13 +143,13 @@ host_shutdown(void) {
 
 static void
 received(unsigned int bytes, isc_sockaddr_t *from, dig_query_t *query) {
-	isc_time_t now;
+	struct timespec now;
 	int diff;
 
 	if (!short_form) {
 		char fromtext[ISC_SOCKADDR_FORMATSIZE];
 		isc_sockaddr_format(from, fromtext, sizeof(fromtext));
-		TIME_NOW(&now);
+		clock_gettime(CLOCK_REALTIME, &now);
 		diff = (int) isc_time_microdiff(&now, &query->time_sent);
 		printf("Received %u bytes from %s in %d ms\n",
 		       bytes, fromtext, diff/1000);
@@ -262,14 +259,7 @@ printsection(dns_message_t *msg, dns_section_t sectionid,
 							     &target);
 				if (result != ISC_R_SUCCESS)
 					return (result);
-#ifdef USEINITALWS
-				if (first) {
-					print_name = &empty_name;
-					first = ISC_FALSE;
-				}
-#else
 				UNUSED(first); /* Shut up compiler. */
-#endif
 			} else {
 				loopresult = dns_rdataset_first(rdataset);
 				while (loopresult == ISC_R_SUCCESS) {
@@ -785,10 +775,10 @@ parse_args(int argc, char **argv) {
 	if (argc == 0)
 		show_usage();
 
-	strlcpy(hostname, *argv, sizeof(hostname));
+	strlcpy(hostname, argv[0], sizeof(hostname));
 
-	if (argc == 2) {
-		set_nameserver(*argv + 1);
+	if (argc >= 2) {
+		set_nameserver(argv[1]);
 		debug("server is %s", *argv + 1);
 		listed_server = ISC_TRUE;
 	} else
@@ -817,6 +807,7 @@ host_main(int argc, char **argv) {
 
 	ISC_LIST_INIT(lookup_list);
 	ISC_LIST_INIT(server_list);
+	ISC_LIST_INIT(root_hints_server_list);
 	ISC_LIST_INIT(search_list);
 
 	fatalexit = 1;
@@ -852,6 +843,5 @@ host_main(int argc, char **argv) {
 	isc_app_run();
 	cancel_all();
 	destroy_libs();
-	isc_app_finish();
 	return ((seen_error == 0) ? 0 : 1);
 }

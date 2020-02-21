@@ -14,11 +14,10 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: rcode.c,v 1.1 2020/02/07 09:58:52 florian Exp $ */
+/* $Id: rcode.c,v 1.5 2020/02/13 10:40:24 jsg Exp $ */
 
 
 #include <ctype.h>
-#include <limits.h>
 #include <stdlib.h>
 
 #include <isc/buffer.h>
@@ -26,7 +25,6 @@
 
 #include <isc/region.h>
 #include <isc/result.h>
-#include <isc/stdio.h>
 
 #include <string.h>
 #include <isc/types.h>
@@ -74,12 +72,6 @@
 	{ 13, "RESERVED13", TOTEXTONLY}, \
 	{ 14, "RESERVED14", TOTEXTONLY}, \
 	{ 15, "RESERVED15", TOTEXTONLY},
-
-#define ERCODENAMES \
-	/* extended rcodes */ \
-	{ dns_rcode_badvers, "BADVERS", 0}, \
-	{ dns_rcode_badcookie, "BADCOOKIE", 0}, \
-	{ 0, NULL, 0 }
 
 #define TSIGRCODENAMES \
 	/* extended rcodes */ \
@@ -162,7 +154,6 @@ struct tbl {
 	int             flags;
 };
 
-static struct tbl rcodes[] = { RCODENAMES ERCODENAMES };
 static struct tbl tsigrcodes[] = { RCODENAMES TSIGRCODENAMES };
 static struct tbl certs[] = { CERTNAMES };
 static struct tbl secalgs[] = { SECALGNAMES };
@@ -300,19 +291,6 @@ dns_mnemonic_totext(unsigned int value, isc_buffer_t *target,
 }
 
 isc_result_t
-dns_rcode_fromtext(dns_rcode_t *rcodep, isc_textregion_t *source) {
-	unsigned int value;
-	RETERR(dns_mnemonic_fromtext(&value, source, rcodes, 0xffff));
-	*rcodep = value;
-	return (ISC_R_SUCCESS);
-}
-
-isc_result_t
-dns_rcode_totext(dns_rcode_t rcode, isc_buffer_t *target) {
-	return (dns_mnemonic_totext(rcode, target, rcodes));
-}
-
-isc_result_t
 dns_tsigrcode_fromtext(dns_rcode_t *rcodep, isc_textregion_t *source) {
 	unsigned int value;
 	RETERR(dns_mnemonic_fromtext(&value, source, tsigrcodes, 0xffff));
@@ -375,11 +353,6 @@ dns_secproto_fromtext(dns_secproto_t *secprotop, isc_textregion_t *source) {
 }
 
 isc_result_t
-dns_secproto_totext(dns_secproto_t secproto, isc_buffer_t *target) {
-	return (dns_mnemonic_totext(secproto, target, secprotos));
-}
-
-isc_result_t
 dns_hashalg_fromtext(unsigned char *hashalg, isc_textregion_t *source) {
 	unsigned int value;
 	RETERR(dns_mnemonic_fromtext(&value, source, hashalgs, 0xff));
@@ -421,10 +394,6 @@ dns_keyflags_fromtext(dns_keyflags_t *flagsp, isc_textregion_t *source)
 		if (p->name == NULL)
 			return (DNS_R_UNKNOWNFLAG);
 		value |= p->value;
-#ifdef notyet
-		if ((mask & p->mask) != 0)
-			warn("overlapping key flags");
-#endif
 		mask |= p->mask;
 		text += len;
 		if (delim != NULL)
@@ -440,26 +409,6 @@ dns_dsdigest_fromtext(dns_dsdigest_t *dsdigestp, isc_textregion_t *source) {
 	RETERR(dns_mnemonic_fromtext(&value, source, dsdigests, 0xff));
 	*dsdigestp = value;
 	return (ISC_R_SUCCESS);
-}
-
-isc_result_t
-dns_dsdigest_totext(dns_dsdigest_t dsdigest, isc_buffer_t *target) {
-	return (dns_mnemonic_totext(dsdigest, target, dsdigests));
-}
-
-void
-dns_dsdigest_format(dns_dsdigest_t typ, char *cp, unsigned int size) {
-	isc_buffer_t b;
-	isc_region_t r;
-	isc_result_t result;
-
-	REQUIRE(cp != NULL && size > 0);
-	isc_buffer_init(&b, cp, size - 1);
-	result = dns_dsdigest_totext(typ, &b);
-	isc_buffer_usedregion(&b, &r);
-	r.base[r.length] = 0;
-	if (result != ISC_R_SUCCESS)
-		r.base[0] = 0;
 }
 
 /*

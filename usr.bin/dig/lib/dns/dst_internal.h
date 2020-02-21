@@ -31,43 +31,26 @@
  * IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: dst_internal.h,v 1.1 2020/02/07 09:58:52 florian Exp $ */
+/* $Id: dst_internal.h,v 1.6 2020/02/18 18:11:27 florian Exp $ */
 
 #ifndef DST_DST_INTERNAL_H
 #define DST_DST_INTERNAL_H 1
 
-#include <isc/lang.h>
 #include <isc/buffer.h>
-
-#include <isc/magic.h>
 #include <isc/region.h>
 #include <isc/types.h>
-#include <isc/md5.h>
 #include <isc/refcount.h>
 #include <isc/sha1.h>
 #include <isc/sha2.h>
-#include <isc/stdtime.h>
-#include <isc/hmacmd5.h>
 #include <isc/hmacsha.h>
 
-
-
 #include <dns/time.h>
-
 #include <dst/dst.h>
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
-
-ISC_LANG_BEGINDECLS
-
-#define KEY_MAGIC	ISC_MAGIC('D','S','T','K')
-#define CTX_MAGIC	ISC_MAGIC('D','S','T','C')
-
-#define VALID_KEY(x) ISC_MAGIC_VALID(x, KEY_MAGIC)
-#define VALID_CTX(x) ISC_MAGIC_VALID(x, CTX_MAGIC)
 
 /***
  *** Types
@@ -89,7 +72,6 @@ typedef enum { DO_SIGN, DO_VERIFY } dst_use_t;
 
 /*% DST Key Structure */
 struct dst_key {
-	unsigned int	magic;
 	isc_refcount_t	refs;
 	dns_name_t *	key_name;	/*%< name of the key */
 	unsigned int	key_size;	/*%< size of the key in bits */
@@ -115,9 +97,9 @@ struct dst_key {
 
 	} keydata;			/*%< pointer to key in crypto pkg fmt */
 
-	isc_stdtime_t	times[DST_MAX_TIMES + 1];    /*%< timing metadata */
+	time_t	times[DST_MAX_TIMES + 1];    /*%< timing metadata */
 	isc_boolean_t	timeset[DST_MAX_TIMES + 1];  /*%< data set? */
-	isc_stdtime_t	nums[DST_MAX_NUMERIC + 1];   /*%< numeric metadata */
+	time_t	nums[DST_MAX_NUMERIC + 1];   /*%< numeric metadata */
 	isc_boolean_t	numset[DST_MAX_NUMERIC + 1]; /*%< data set? */
 	isc_boolean_t 	inactive;      /*%< private key not present as it is
 					    inactive */
@@ -131,7 +113,6 @@ struct dst_key {
 };
 
 struct dst_context {
-	unsigned int magic;
 	dst_use_t use;
 	dst_key_t *key;
 	isc_logcategory_t *category;
@@ -198,7 +179,7 @@ struct dst_func {
 /*%
  * Initializers
  */
-isc_result_t dst__openssl_init(const char *engine);
+isc_result_t dst__openssl_init(void);
 
 isc_result_t dst__hmacsha1_init(struct dst_func **funcp);
 isc_result_t dst__hmacsha224_init(struct dst_func **funcp);
@@ -220,8 +201,6 @@ void dst__openssl_destroy(void);
 void * dst__mem_alloc(size_t size);
 void   dst__mem_free(void *ptr);
 void * dst__mem_realloc(void *ptr, size_t size);
-
-ISC_LANG_ENDDECLS
 
 #endif /* DST_DST_INTERNAL_H */
 /*! \file */

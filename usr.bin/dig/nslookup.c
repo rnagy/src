@@ -22,10 +22,8 @@
 #include <isc/app.h>
 #include <isc/buffer.h>
 #include <isc/event.h>
-#include <isc/parseint.h>
 #include <isc/util.h>
 #include <isc/task.h>
-#include <isc/netaddr.h>
 
 #include <dns/message.h>
 #include <dns/name.h>
@@ -35,7 +33,6 @@
 #include <dns/rdataset.h>
 #include "rdatastruct.h"
 #include <dns/rdatatype.h>
-#include <dns/byaddr.h>
 
 #include "dig.h"
 
@@ -728,10 +725,8 @@ do_next_command(char *input) {
 		setoption(arg);
 	else if ((strcasecmp(ptr, "server") == 0) ||
 		 (strcasecmp(ptr, "lserver") == 0)) {
-		isc_app_block();
 		set_nameserver(arg);
 		check_ra = ISC_FALSE;
-		isc_app_unblock();
 		show_settings(ISC_TRUE, ISC_TRUE);
 	} else if (strcasecmp(ptr, "exit") == 0) {
 		in_use = ISC_FALSE;
@@ -756,14 +751,12 @@ get_next_command(void) {
 	buf = malloc(COMMSIZE);
 	if (buf == NULL)
 		fatal("memory allocation failure");
-	isc_app_block();
 	if (interactive) {
 		fputs("> ", stderr);
 		fflush(stderr);
 		ptr = fgets(buf, COMMSIZE, stdin);
 	} else
 		ptr = fgets(buf, COMMSIZE, stdin);
-	isc_app_unblock();
 	if (ptr == NULL) {
 		in_use = ISC_FALSE;
 	} else
@@ -868,6 +861,7 @@ nslookup_main(int argc, char **argv) {
 
 	ISC_LIST_INIT(lookup_list);
 	ISC_LIST_INIT(server_list);
+	ISC_LIST_INIT(root_hints_server_list);
 	ISC_LIST_INIT(search_list);
 
 	check_ra = ISC_TRUE;
@@ -915,7 +909,6 @@ nslookup_main(int argc, char **argv) {
 		isc_event_free(&global_event);
 	cancel_all();
 	destroy_libs();
-	isc_app_finish();
 
 	return (query_error | print_error);
 }

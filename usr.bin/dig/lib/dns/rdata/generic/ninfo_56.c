@@ -20,21 +20,6 @@
 #define RRTYPE_NINFO_ATTRIBUTES (0)
 
 static inline isc_result_t
-fromtext_ninfo(ARGS_FROMTEXT) {
-
-	REQUIRE(type == dns_rdatatype_ninfo);
-
-	UNUSED(type);
-	UNUSED(rdclass);
-	UNUSED(origin);
-	UNUSED(options);
-	UNUSED(callbacks);
-
-	return (generic_fromtext_txt(rdclass, type, lexer, origin, options,
-				     target, callbacks));
-}
-
-static inline isc_result_t
 totext_ninfo(ARGS_TOTEXT) {
 
 	UNUSED(tctx);
@@ -165,32 +150,4 @@ casecompare_ninfo(ARGS_COMPARE) {
 	return (compare_ninfo(rdata1, rdata2));
 }
 
-isc_result_t
-dns_rdata_ninfo_first(dns_rdata_ninfo_t *ninfo) {
-
-	REQUIRE(ninfo != NULL);
-	REQUIRE(ninfo->common.rdtype == dns_rdatatype_ninfo);
-
-	return (generic_txt_first(ninfo));
-}
-
-isc_result_t
-dns_rdata_ninfo_next(dns_rdata_ninfo_t *ninfo) {
-
-	REQUIRE(ninfo != NULL);
-	REQUIRE(ninfo->common.rdtype == dns_rdatatype_ninfo);
-
-	return (generic_txt_next(ninfo));
-}
-
-isc_result_t
-dns_rdata_ninfo_current(dns_rdata_ninfo_t *ninfo,
-			dns_rdata_ninfo_string_t *string)
-{
-
-	REQUIRE(ninfo != NULL);
-	REQUIRE(ninfo->common.rdtype == dns_rdatatype_ninfo);
-
-	return (generic_txt_current(ninfo, string));
-}
 #endif	/* RDATA_GENERIC_NINFO_56_C */
