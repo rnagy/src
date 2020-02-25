@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: dighost.c,v 1.14 2020/02/21 19:53:39 jung Exp $ */
+/* $Id: dighost.c,v 1.23 2020/02/25 05:00:42 jsg Exp $ */
 
 /*! \file
  *  \note
@@ -33,6 +33,8 @@
 #include <resolv.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <stdint.h>
 
 #include <dns/byaddr.h>
 #include <dns/fixedname.h>
@@ -43,7 +45,6 @@
 #include <dns/rdataclass.h>
 #include <dns/rdatalist.h>
 #include <dns/rdataset.h>
-#include "rdatastruct.h"
 #include <dns/rdatatype.h>
 #include <dns/result.h>
 #include <dns/tsig.h>
@@ -51,7 +52,6 @@
 #include <dst/dst.h>
 #include <dst/result.h>
 
-#include <isc/app.h>
 #include <isc/base64.h>
 #include <isc/hex.h>
 #include <isc/log.h>
@@ -169,7 +169,6 @@ dns_tsigkey_t *tsigkey = NULL;
 isc_boolean_t validated = ISC_TRUE;
 isc_boolean_t debugging = ISC_FALSE;
 isc_boolean_t debugtiming = ISC_FALSE;
-isc_boolean_t memdebugging = ISC_FALSE;
 char *progname = NULL;
 dig_lookup_t *current_lookup = NULL;
 
@@ -1719,10 +1718,10 @@ followup_lookup(dns_message_t *msg, dig_query_t *query, dns_section_t section)
 			dns_rdataset_current(rdataset, &rdata);
 
 			query->lookup->nsfound++;
-			result = dns_rdata_tostruct(&rdata, &ns);
-			check_result(result, "dns_rdata_tostruct");
+			result = dns_rdata_tostruct_ns(&rdata, &ns);
+			check_result(result, "dns_rdata_tostruct_ns");
 			dns_name_format(&ns.name, namestr, sizeof(namestr));
-			dns_rdata_freestruct(&ns);
+			dns_rdata_freestruct_ns(&ns);
 
 			/* Initialize lookup if we've not yet */
 			debug("found NS %s", namestr);
@@ -1894,10 +1893,10 @@ insert_soa(dig_lookup_t *lookup) {
 	result = dns_message_gettemprdata(lookup->sendmsg, &rdata);
 	check_result(result, "dns_message_gettemprdata");
 
-	result = dns_rdata_fromstruct(rdata, lookup->rdclass,
+	result = dns_rdata_fromstruct_soa(rdata, lookup->rdclass,
 				      dns_rdatatype_soa, &soa,
 				      &lookup->rdatabuf);
-	check_result(result, "isc_rdata_fromstruct");
+	check_result(result, "isc_rdata_fromstruct_soa");
 
 	result = dns_message_gettemprdatalist(lookup->sendmsg, &rdatalist);
 	check_result(result, "dns_message_gettemprdatalist");
@@ -2330,10 +2329,10 @@ setup_lookup(dig_lookup_t *lookup) {
 	}
 
 	result = dns_message_rendersection(lookup->sendmsg,
-					   DNS_SECTION_QUESTION, 0);
+					   DNS_SECTION_QUESTION);
 	check_result(result, "dns_message_rendersection");
 	result = dns_message_rendersection(lookup->sendmsg,
-					   DNS_SECTION_AUTHORITY, 0);
+					   DNS_SECTION_AUTHORITY);
 	check_result(result, "dns_message_rendersection");
 	result = dns_message_renderend(lookup->sendmsg);
 	check_result(result, "dns_message_renderend");
@@ -2531,7 +2530,6 @@ force_timeout(dig_query_t *query) {
 	if (query->timer != NULL)
 		isc_timer_detach(&query->timer);
 }
-
 
 static void
 connect_done(isc_task_t *task, isc_event_t *event);
@@ -3102,10 +3100,10 @@ check_for_more_data(dig_query_t *query, dns_message_t *msg,
 
 				/* Now we have an SOA.  Work with it. */
 				debug("got an SOA");
-				result = dns_rdata_tostruct(&rdata, &soa);
-				check_result(result, "dns_rdata_tostruct");
+				result = dns_rdata_tostruct_soa(&rdata, &soa);
+				check_result(result, "dns_rdata_tostruct_soa");
 				serial = soa.serial;
-				dns_rdata_freestruct(&soa);
+				dns_rdata_freestruct_soa(&soa);
 				if (!query->first_soa_rcvd) {
 					query->first_soa_rcvd = ISC_TRUE;
 					query->first_rr_serial = serial;
@@ -3437,7 +3435,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 	}
 
 	debug("before parse starts");
-	parseflags = DNS_MESSAGEPARSE_PRESERVEORDER;
+	parseflags = 0;
 	if (l->besteffort) {
 		parseflags |= DNS_MESSAGEPARSE_BESTEFFORT;
 		parseflags |= DNS_MESSAGEPARSE_IGNORETRUNCATION;
@@ -3907,8 +3905,6 @@ destroy_libs(void) {
 	flush_server_list();
 
 	clear_searchlist();
-
-	dns_name_destroy();
 
 	if (socketmgr != NULL) {
 		debug("freeing socketmgr");

@@ -131,9 +131,6 @@ typedef isc_event_t intev_t;
  */
 #define NRETRIES 10
 
-typedef struct isc_socket isc_socket_t;
-typedef struct isc_socketmgr isc_socketmgr_t;
-
 struct isc_socket {
 	/* Not locked. */
 	isc_socketmgr_t	*manager;
@@ -241,7 +238,6 @@ enum {
 	STATID_RECVFAIL = 9,
 	STATID_ACTIVE = 10
 };
-
 
 static void
 socket_log(isc_socket_t *sock, isc_sockaddr_t *address,
@@ -1993,7 +1989,6 @@ isc_socket_recvv(isc_socket_t *sock0, isc_bufferlist_t *buflist,
 {
 	isc_socket_t *sock = (isc_socket_t *)sock0;
 	isc_socketevent_t *dev;
-	isc_socketmgr_t *manager;
 	unsigned int iocount;
 	isc_buffer_t *buffer;
 
@@ -2001,8 +1996,6 @@ isc_socket_recvv(isc_socket_t *sock0, isc_bufferlist_t *buflist,
 	REQUIRE(!ISC_LIST_EMPTY(*buflist));
 	REQUIRE(task != NULL);
 	REQUIRE(action != NULL);
-
-	manager = sock->manager;
 
 	iocount = isc_bufferlist_availablecount(buflist);
 	REQUIRE(iocount > 0);
@@ -2136,7 +2129,6 @@ isc_socket_sendtov2(isc_socket_t *sock0, isc_bufferlist_t *buflist,
 {
 	isc_socket_t *sock = (isc_socket_t *)sock0;
 	isc_socketevent_t *dev;
-	isc_socketmgr_t *manager;
 	unsigned int iocount;
 	isc_buffer_t *buffer;
 
@@ -2144,8 +2136,6 @@ isc_socket_sendtov2(isc_socket_t *sock0, isc_bufferlist_t *buflist,
 	REQUIRE(!ISC_LIST_EMPTY(*buflist));
 	REQUIRE(task != NULL);
 	REQUIRE(action != NULL);
-
-	manager = sock->manager;
 
 	iocount = isc_bufferlist_usedcount(buflist);
 	REQUIRE(iocount > 0);
@@ -2396,7 +2386,6 @@ internal_connect(isc_task_t *me, isc_event_t *ev) {
 				    SELECT_POKE_CONNECT);
 			return;
 		}
-
 
 		/*
 		 * Translate other errors into ISC_R_* flavors.

@@ -14,11 +14,9 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: lex.c,v 1.5 2020/02/18 18:11:27 florian Exp $ */
+/* $Id: lex.c,v 1.8 2020/02/25 05:00:43 jsg Exp $ */
 
 /*! \file */
-
-
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -141,7 +139,6 @@ isc_lex_setcomments(isc_lex_t *lex, unsigned int comments) {
 	 * Set allowed lexer commenting styles.
 	 */
 
-
 	lex->comments = comments;
 }
 
@@ -151,7 +148,6 @@ isc_lex_setspecials(isc_lex_t *lex, isc_lexspecials_t specials) {
 	 * The characters in 'specials' are returned as tokens.  Along with
 	 * whitespace, they delimit strings and numbers.
 	 */
-
 
 	memmove(lex->specials, specials, 256);
 }
@@ -201,7 +197,6 @@ isc_lex_openfile(isc_lex_t *lex, const char *filename) {
 	 * Open 'filename' and make it the current input source for 'lex'.
 	 */
 
-
 	if ((stream = fopen(filename, "r")) == NULL)
 		return (isc__errno2result(errno));
 
@@ -218,7 +213,6 @@ isc_lex_close(isc_lex_t *lex) {
 	/*
 	 * Close the most recently opened object (i.e. file or buffer).
 	 */
-
 
 	source = HEAD(lex->sources);
 	if (source == NULL)
@@ -720,69 +714,6 @@ isc_lex_gettoken(isc_lex_t *lex, unsigned int options, isc_token_t *tokenp) {
 	return (result);
 }
 
-isc_result_t
-isc_lex_getmastertoken(isc_lex_t *lex, isc_token_t *token,
-		       isc_tokentype_t expect, isc_boolean_t eol)
-{
-	unsigned int options = ISC_LEXOPT_EOL | ISC_LEXOPT_EOF |
-			       ISC_LEXOPT_DNSMULTILINE | ISC_LEXOPT_ESCAPE;
-	isc_result_t result;
-
-	if (expect == isc_tokentype_qstring)
-		options |= ISC_LEXOPT_QSTRING;
-	else if (expect == isc_tokentype_number)
-		options |= ISC_LEXOPT_NUMBER;
-	result = isc_lex_gettoken(lex, options, token);
-	if (result == ISC_R_RANGE)
-		isc_lex_ungettoken(lex, token);
-	if (result != ISC_R_SUCCESS)
-		return (result);
-
-	if (eol && ((token->type == isc_tokentype_eol) ||
-		    (token->type == isc_tokentype_eof)))
-		return (ISC_R_SUCCESS);
-	if (token->type == isc_tokentype_string &&
-	    expect == isc_tokentype_qstring)
-		return (ISC_R_SUCCESS);
-	if (token->type != expect) {
-		isc_lex_ungettoken(lex, token);
-		if (token->type == isc_tokentype_eol ||
-		    token->type == isc_tokentype_eof)
-			return (ISC_R_UNEXPECTEDEND);
-		if (expect == isc_tokentype_number)
-			return (ISC_R_BADNUMBER);
-		return (ISC_R_UNEXPECTEDTOKEN);
-	}
-	return (ISC_R_SUCCESS);
-}
-
-isc_result_t
-isc_lex_getoctaltoken(isc_lex_t *lex, isc_token_t *token, isc_boolean_t eol)
-{
-	unsigned int options = ISC_LEXOPT_EOL | ISC_LEXOPT_EOF |
-			       ISC_LEXOPT_DNSMULTILINE | ISC_LEXOPT_ESCAPE|
-			       ISC_LEXOPT_NUMBER | ISC_LEXOPT_OCTAL;
-	isc_result_t result;
-
-	result = isc_lex_gettoken(lex, options, token);
-	if (result == ISC_R_RANGE)
-		isc_lex_ungettoken(lex, token);
-	if (result != ISC_R_SUCCESS)
-		return (result);
-
-	if (eol && ((token->type == isc_tokentype_eol) ||
-		    (token->type == isc_tokentype_eof)))
-		return (ISC_R_SUCCESS);
-	if (token->type != isc_tokentype_number) {
-		isc_lex_ungettoken(lex, token);
-		if (token->type == isc_tokentype_eol ||
-		    token->type == isc_tokentype_eof)
-			return (ISC_R_UNEXPECTEDEND);
-		return (ISC_R_BADNUMBER);
-	}
-	return (ISC_R_SUCCESS);
-}
-
 void
 isc_lex_ungettoken(isc_lex_t *lex, isc_token_t *tokenp) {
 	inputsource *source;
@@ -824,7 +755,6 @@ isc_lex_getlasttokentext(isc_lex_t *lex, isc_token_t *tokenp, isc_region_t *r)
 		    source->ignored;
 }
 
-
 char *
 isc_lex_getsourcename(isc_lex_t *lex) {
 	inputsource *source;
@@ -847,16 +777,4 @@ isc_lex_getsourceline(isc_lex_t *lex) {
 		return (0);
 
 	return (source->line);
-}
-
-isc_boolean_t
-isc_lex_isfile(isc_lex_t *lex) {
-	inputsource *source;
-
-	source = HEAD(lex->sources);
-
-	if (source == NULL)
-		return (ISC_FALSE);
-
-	return (source->is_file);
 }

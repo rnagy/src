@@ -15,7 +15,7 @@
  */
 
 /*
- * $Id: tsig.c,v 1.8 2020/02/18 18:11:27 florian Exp $
+ * $Id: tsig.c,v 1.13 2020/02/24 17:57:54 florian Exp $
  */
 /*! \file */
 
@@ -33,7 +33,6 @@
 #include <dns/rdata.h>
 #include <dns/rdatalist.h>
 #include <dns/rdataset.h>
-#include "rdatastruct.h"
 #include <dns/result.h>
 #include <dns/tsig.h>
 
@@ -292,10 +291,9 @@ dns_tsigkey_create(dns_name_t *name, dns_name_t *algorithm,
 
 			isc_buffer_init(&b, secret, length);
 			isc_buffer_add(&b, length);
-			result = dst_key_frombuffer(name, DST_ALG_HMACSHA1,
+			result = dst_key_frombuffer(DST_ALG_HMACSHA1,
 						    DNS_KEYOWNER_ENTITY,
 						    DNS_KEYPROTO_DNSSEC,
-						    dns_rdataclass_in,
 						    &b, &dstkey);
 				if (result != ISC_R_SUCCESS)
 					return (result);
@@ -306,10 +304,9 @@ dns_tsigkey_create(dns_name_t *name, dns_name_t *algorithm,
 
 			isc_buffer_init(&b, secret, length);
 			isc_buffer_add(&b, length);
-			result = dst_key_frombuffer(name, DST_ALG_HMACSHA224,
+			result = dst_key_frombuffer(DST_ALG_HMACSHA224,
 						    DNS_KEYOWNER_ENTITY,
 						    DNS_KEYPROTO_DNSSEC,
-						    dns_rdataclass_in,
 						    &b, &dstkey);
 				if (result != ISC_R_SUCCESS)
 					return (result);
@@ -320,10 +317,9 @@ dns_tsigkey_create(dns_name_t *name, dns_name_t *algorithm,
 
 			isc_buffer_init(&b, secret, length);
 			isc_buffer_add(&b, length);
-			result = dst_key_frombuffer(name, DST_ALG_HMACSHA256,
+			result = dst_key_frombuffer(DST_ALG_HMACSHA256,
 						    DNS_KEYOWNER_ENTITY,
 						    DNS_KEYPROTO_DNSSEC,
-						    dns_rdataclass_in,
 						    &b, &dstkey);
 				if (result != ISC_R_SUCCESS)
 					return (result);
@@ -334,10 +330,9 @@ dns_tsigkey_create(dns_name_t *name, dns_name_t *algorithm,
 
 			isc_buffer_init(&b, secret, length);
 			isc_buffer_add(&b, length);
-			result = dst_key_frombuffer(name, DST_ALG_HMACSHA384,
+			result = dst_key_frombuffer(DST_ALG_HMACSHA384,
 						    DNS_KEYOWNER_ENTITY,
 						    DNS_KEYPROTO_DNSSEC,
-						    dns_rdataclass_in,
 						    &b, &dstkey);
 				if (result != ISC_R_SUCCESS)
 					return (result);
@@ -348,10 +343,9 @@ dns_tsigkey_create(dns_name_t *name, dns_name_t *algorithm,
 
 			isc_buffer_init(&b, secret, length);
 			isc_buffer_add(&b, length);
-			result = dst_key_frombuffer(name, DST_ALG_HMACSHA512,
+			result = dst_key_frombuffer(DST_ALG_HMACSHA512,
 						    DNS_KEYOWNER_ENTITY,
 						    DNS_KEYPROTO_DNSSEC,
-						    dns_rdataclass_in,
 						    &b, &dstkey);
 				if (result != ISC_R_SUCCESS)
 					return (result);
@@ -501,7 +495,8 @@ dns_tsig_sign(dns_message_t *msg) {
 			if (ret != ISC_R_SUCCESS)
 				goto cleanup_context;
 			dns_rdataset_current(msg->querytsig, &querytsigrdata);
-			ret = dns_rdata_tostruct(&querytsigrdata, &querytsig);
+			ret = dns_rdata_tostruct_tsig(&querytsigrdata,
+						      &querytsig);
 			if (ret != ISC_R_SUCCESS)
 				goto cleanup_context;
 			isc_buffer_putuint16(&databuf, querytsig.siglen);
@@ -644,8 +639,8 @@ dns_tsig_sign(dns_message_t *msg) {
 	ret = isc_buffer_allocate(&dynbuf, 512);
 	if (ret != ISC_R_SUCCESS)
 		goto cleanup_rdata;
-	ret = dns_rdata_fromstruct(rdata, dns_rdataclass_any,
-				   dns_rdatatype_tsig, &tsig, dynbuf);
+	ret = dns_rdata_fromstruct_tsig(rdata, dns_rdataclass_any,
+				        dns_rdatatype_tsig, &tsig, dynbuf);
 	if (ret != ISC_R_SUCCESS)
 		goto cleanup_dynbuf;
 
@@ -761,7 +756,7 @@ dns_tsig_verify(isc_buffer_t *source, dns_message_t *msg)
 	if (ret != ISC_R_SUCCESS)
 		return (ret);
 	dns_rdataset_current(msg->tsig, &rdata);
-	ret = dns_rdata_tostruct(&rdata, &tsig);
+	ret = dns_rdata_tostruct_tsig(&rdata, &tsig);
 	if (ret != ISC_R_SUCCESS)
 		return (ret);
 	dns_rdata_reset(&rdata);
@@ -770,7 +765,7 @@ dns_tsig_verify(isc_buffer_t *source, dns_message_t *msg)
 		if (ret != ISC_R_SUCCESS)
 			return (ret);
 		dns_rdataset_current(msg->querytsig, &rdata);
-		ret = dns_rdata_tostruct(&rdata, &querytsig);
+		ret = dns_rdata_tostruct_tsig(&rdata, &querytsig);
 		if (ret != ISC_R_SUCCESS)
 			return (ret);
 	}
@@ -1081,7 +1076,7 @@ tsig_verify_tcp(isc_buffer_t *source, dns_message_t *msg) {
 	if (ret != ISC_R_SUCCESS)
 		return (ret);
 	dns_rdataset_current(msg->querytsig, &rdata);
-	ret = dns_rdata_tostruct(&rdata, &querytsig);
+	ret = dns_rdata_tostruct_tsig(&rdata, &querytsig);
 	if (ret != ISC_R_SUCCESS)
 		return (ret);
 	dns_rdata_reset(&rdata);
@@ -1097,7 +1092,7 @@ tsig_verify_tcp(isc_buffer_t *source, dns_message_t *msg) {
 		if (ret != ISC_R_SUCCESS)
 			goto cleanup_querystruct;
 		dns_rdataset_current(msg->tsig, &rdata);
-		ret = dns_rdata_tostruct(&rdata, &tsig);
+		ret = dns_rdata_tostruct_tsig(&rdata, &tsig);
 		if (ret != ISC_R_SUCCESS)
 			goto cleanup_querystruct;
 
@@ -1362,7 +1357,7 @@ tsig_verify_tcp(isc_buffer_t *source, dns_message_t *msg) {
 	}
 
  cleanup_querystruct:
-	dns_rdata_freestruct(&querytsig);
+	dns_rdata_freestruct_tsig(&querytsig);
 
 	return (ret);
 }

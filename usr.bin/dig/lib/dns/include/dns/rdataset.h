@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: rdataset.h,v 1.5 2020/02/18 18:11:27 florian Exp $ */
+/* $Id: rdataset.h,v 1.9 2020/02/24 17:57:54 florian Exp $ */
 
 #ifndef DNS_RDATASET_H
 #define DNS_RDATASET_H 1
@@ -51,7 +51,6 @@
  */
 
 #include <dns/types.h>
-#include "rdatastruct.h"
 
 typedef enum {
 	dns_rdatasetadditional_fromauth,
@@ -189,8 +188,6 @@ struct dns_rdataset {
 #define DNS_RDATASETATTR_NXDOMAIN	0x00002000
 #define DNS_RDATASETATTR_NOQNAME	0x00004000
 #define DNS_RDATASETATTR_CHECKNAMES	0x00008000	/*%< Used by resolver. */
-#define DNS_RDATASETATTR_REQUIRED	0x00010000
-#define DNS_RDATASETATTR_REQUIREDGLUE	DNS_RDATASETATTR_REQUIRED
 #define DNS_RDATASETATTR_LOADORDER	0x00020000
 #define DNS_RDATASETATTR_RESIGN		0x00040000
 #define DNS_RDATASETATTR_CLOSEST	0x00080000
@@ -353,7 +350,6 @@ dns_rdataset_towire(dns_rdataset_t *rdataset,
 		    dns_name_t *owner_name,
 		    dns_compress_t *cctx,
 		    isc_buffer_t *target,
-		    unsigned int options,
 		    unsigned int *countp);
 /*%<
  * Convert 'rdataset' to wire format, compressing names as specified
@@ -394,7 +390,6 @@ dns_rdataset_towiresorted(dns_rdataset_t *rdataset,
 			  isc_buffer_t *target,
 			  dns_rdatasetorderfunc_t order,
 			  const void *order_arg,
-			  unsigned int options,
 			  unsigned int *countp);
 /*%<
  * Like dns_rdataset_towire(), but sorting the rdatasets according to
@@ -404,34 +399,6 @@ dns_rdataset_towiresorted(dns_rdataset_t *rdataset,
  * Requires:
  *\li	All the requirements of dns_rdataset_towire(), and
  *	that order_arg is NULL if and only if order is NULL.
- */
-
-isc_result_t
-dns_rdataset_towirepartial(dns_rdataset_t *rdataset,
-			   const dns_name_t *owner_name,
-			   dns_compress_t *cctx,
-			   isc_buffer_t *target,
-			   dns_rdatasetorderfunc_t order,
-			   const void *order_arg,
-			   unsigned int options,
-			   unsigned int *countp,
-			   void **state);
-/*%<
- * Like dns_rdataset_towiresorted() except that a partial rdataset
- * may be written.
- *
- * Requires:
- *\li	All the requirements of dns_rdataset_towiresorted().
- *	If 'state' is non NULL then the current position in the
- *	rdataset will be remembered if the rdataset in not
- *	completely written and should be passed on on subsequent
- *	calls (NOT CURRENTLY IMPLEMENTED).
- *
- * Returns:
- *\li	#ISC_R_SUCCESS if all of the records were written.
- *\li	#ISC_R_NOSPACE if unable to fit in all of the records. *countp
- *		      will be updated to reflect the number of records
- *		      written.
  */
 
 #endif /* DNS_RDATASET_H */

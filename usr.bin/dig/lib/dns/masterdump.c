@@ -227,7 +227,6 @@ totext_ctx_init(const dns_master_style_t *style, dns_totext_ctx_t *ctx) {
 			    return (result); \
 	} while (0)
 
-
 static isc_result_t
 str_totext(const char *source, isc_buffer_t *target) {
 	unsigned int l;
@@ -549,18 +548,6 @@ dns_master_questiontotext(dns_name_t *owner_name,
 
 	return (question_totext(rdataset, owner_name, &ctx,
 				ISC_FALSE, target));
-}
-
-isc_result_t
-dns_master_stylecreate(dns_master_style_t **stylep, unsigned int flags,
-		       unsigned int ttl_column, unsigned int class_column,
-		       unsigned int type_column, unsigned int rdata_column,
-		       unsigned int line_length, unsigned int tab_width)
-{
-	return (dns_master_stylecreate2(stylep, flags, ttl_column,
-					class_column, type_column,
-					rdata_column, line_length,
-					tab_width, 0xffffffff));
 }
 
 isc_result_t

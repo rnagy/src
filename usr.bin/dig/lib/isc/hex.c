@@ -14,18 +14,17 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: hex.c,v 1.1 2020/02/07 09:58:53 florian Exp $ */
+/* $Id: hex.c,v 1.3 2020/02/24 13:49:38 jsg Exp $ */
 
 /*! \file */
 
-
-
 #include <ctype.h>
+#include <string.h>
 
 #include <isc/buffer.h>
 #include <isc/hex.h>
-#include <isc/lex.h>
-#include <string.h>
+#include <isc/region.h>
+#include <isc/types.h>
 #include <isc/util.h>
 
 #define RETERR(x) do { \
@@ -33,7 +32,6 @@
 	if (_r != ISC_R_SUCCESS) \
 		return (_r); \
 	} while (0)
-
 
 /*
  * BEW: These static functions are copied from lib/dns/rdata.c.
@@ -121,36 +119,6 @@ hex_decode_finish(hex_decode_ctx_t *ctx) {
 		return (ISC_R_UNEXPECTEDEND);
 	if (ctx->digits != 0)
 		return (ISC_R_BADHEX);
-	return (ISC_R_SUCCESS);
-}
-
-isc_result_t
-isc_hex_tobuffer(isc_lex_t *lexer, isc_buffer_t *target, int length) {
-	hex_decode_ctx_t ctx;
-	isc_textregion_t *tr;
-	isc_token_t token;
-	isc_boolean_t eol;
-
-	hex_decode_init(&ctx, length, target);
-
-	while (ctx.length != 0) {
-		unsigned int i;
-
-		if (length > 0)
-			eol = ISC_FALSE;
-		else
-			eol = ISC_TRUE;
-		RETERR(isc_lex_getmastertoken(lexer, &token,
-					      isc_tokentype_string, eol));
-		if (token.type != isc_tokentype_string)
-			break;
-		tr = &token.value.as_textregion;
-		for (i = 0; i < tr->length; i++)
-			RETERR(hex_decode_char(&ctx, tr->base[i]));
-	}
-	if (ctx.length < 0)
-		isc_lex_ungettoken(lexer, &token);
-	RETERR(hex_decode_finish(&ctx));
 	return (ISC_R_SUCCESS);
 }
 

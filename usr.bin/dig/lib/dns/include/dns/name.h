@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: name.h,v 1.6 2020/02/18 18:11:27 florian Exp $ */
+/* $Id: name.h,v 1.11 2020/02/25 05:00:42 jsg Exp $ */
 
 #ifndef DNS_NAME_H
 #define DNS_NAME_H 1
@@ -142,21 +142,11 @@ struct dns_name {
 #define DNS_NAME_CHECKMXFAIL		0x0020		/*%< Used by rdata. */
 
 extern dns_name_t *dns_rootname;
-extern dns_name_t *dns_wildcardname;
 
 /*%
  * Standard size of a wire format name
  */
 #define DNS_NAME_MAXWIRE 255
-
-/*
- * Text output filter procedure.
- * 'target' is the buffer to be converted.  The region to be converted
- * is from 'buffer'->base + 'used_org' to the end of the used region.
- */
-typedef isc_result_t (*dns_name_totextfilter_t)(isc_buffer_t *target,
-						unsigned int used_org,
-						isc_boolean_t absolute);
 
 /***
  *** Initialization
@@ -390,27 +380,6 @@ dns_name_caseequal(const dns_name_t *name1, const dns_name_t *name2);
  * Case sensitive version of dns_name_equal().
  */
 
-int
-dns_name_rdatacompare(const dns_name_t *name1, const dns_name_t *name2);
-/*%<
- * Compare two names as if they are part of rdata in DNSSEC canonical
- * form.
- *
- * Requires:
- * \li	'name1' is a valid absolute name
- *
- * \li	dns_name_countlabels(name1) > 0
- *
- * \li	'name2' is a valid absolute name
- *
- * \li	dns_name_countlabels(name2) > 0
- *
- * Returns:
- * \li	< 0		'name1' is less than 'name2'
- * \li	0		'name1' is equal to 'name2'
- * \li	> 0		'name1' is greater than 'name2'
- */
-
 isc_boolean_t
 dns_name_issubdomain(const dns_name_t *name1, const dns_name_t *name2);
 /*%<
@@ -500,7 +469,6 @@ dns_name_getlabelsequence(const dns_name_t *source, unsigned int first,
  *
  * \li	first + n <= dns_name_countlabels(name)
  */
-
 
 void
 dns_name_clone(const dns_name_t *source, dns_name_t *target);
@@ -822,53 +790,6 @@ dns_name_concatenate(dns_name_t *prefix, dns_name_t *suffix,
  *\li	#DNS_R_NAMETOOLONG
  */
 
-void
-dns_name_split(dns_name_t *name, unsigned int suffixlabels,
-	       dns_name_t *prefix, dns_name_t *suffix);
-/*%<
- *
- * Split 'name' into two pieces on a label boundary.
- *
- * Notes:
- * \li     'name' is split such that 'suffix' holds the most significant
- *      'suffixlabels' labels.  All other labels are stored in 'prefix'.
- *
- *\li	Copying name data is avoided as much as possible, so 'prefix'
- *	and 'suffix' will end up pointing at the data for 'name'.
- *
- *\li	It is legitimate to pass a 'prefix' or 'suffix' that has
- *	its name data stored someplace other than the dedicated buffer.
- *	This is useful to avoid name copying in the calling function.
- *
- *\li	It is also legitimate to pass a 'prefix' or 'suffix' that is
- *	the same dns_name_t as 'name'.
- *
- * Requires:
- *\li	'name' is a valid name.
- *
- *\li	'suffixlabels' cannot exceed the number of labels in 'name'.
- *
- * \li	'prefix' is a valid name or NULL, and cannot be read-only.
- *
- *\li	'suffix' is a valid name or NULL, and cannot be read-only.
- *
- * Ensures:
- *
- *\li	On success:
- *		If 'prefix' is not NULL it will contain the least significant
- *		labels.
- *		If 'suffix' is not NULL it will contain the most significant
- *		labels.  dns_name_countlabels(suffix) will be equal to
- *		suffixlabels.
- *
- *\li	On failure:
- *		Either 'prefix' or 'suffix' is invalidated (depending
- *		on which one the problem was encountered with).
- *
- * Returns:
- *\li	#ISC_R_SUCCESS	No worries.  (This function should always success).
- */
-
 isc_result_t
 dns_name_dup(const dns_name_t *source,
 	     dns_name_t *target);
@@ -919,33 +840,6 @@ dns_name_free(dns_name_t *name);
  *	invalidated.
  */
 
-isc_result_t
-dns_name_digest(dns_name_t *name, dns_digestfunc_t digest, void *arg);
-/*%<
- * Send 'name' in DNSSEC canonical form to 'digest'.
- *
- * Requires:
- *
- *\li	'name' is a valid name.
- *
- *\li	'digest' is a valid dns_digestfunc_t.
- *
- * Ensures:
- *
- *\li	If successful, the DNSSEC canonical form of 'name' will have been
- *	sent to 'digest'.
- *
- *\li	If digest() returns something other than ISC_R_SUCCESS, that result
- *	will be returned as the result of dns_name_digest().
- *
- * Returns:
- *
- *\li	#ISC_R_SUCCESS
- *
- *\li	Many other results are possible if not successful.
- *
- */
-
 isc_boolean_t
 dns_name_dynamic(dns_name_t *name);
 /*%<
@@ -986,8 +880,6 @@ dns_name_format(dns_name_t *name, char *cp, unsigned int size);
  */
 
 isc_result_t
-dns_name_fromstring(dns_name_t *target, const char *src, unsigned int options);
-isc_result_t
 dns_name_fromstring2(dns_name_t *target, const char *src,
 		     const dns_name_t *origin, unsigned int options);
 /*%<
@@ -1010,22 +902,6 @@ dns_name_fromstring2(dns_name_t *target, const char *src,
  *\li	Any error that dns_name_fromtext() can return.
  *
  *\li	Any error that dns_name_dup() can return.
- */
-
-isc_result_t
-dns_name_settotextfilter(dns_name_totextfilter_t proc);
-/*%<
- * Set / clear a thread specific function 'proc' to be called at the
- * end of dns_name_totext().
- *
- * Note: Under Windows you need to call "dns_name_settotextfilter(NULL);"
- * prior to exiting the thread otherwise memory will be leaked.
- * For other platforms, which are pthreads based, this is still a good
- * idea but not required.
- *
- * Returns
- *\li	#ISC_R_SUCCESS
- *\li	#ISC_R_UNEXPECTED
  */
 
 #define DNS_NAME_FORMATSIZE (DNS_NAME_MAXTEXT + 1)
@@ -1058,56 +934,9 @@ dns_name_copy(dns_name_t *source, dns_name_t *dest, isc_buffer_t *target);
  *\li	#ISC_R_NOSPACE
  */
 
-isc_boolean_t
-dns_name_ishostname(const dns_name_t *name, isc_boolean_t wildcard);
-/*%<
- * Return if 'name' is a valid hostname.  RFC 952 / RFC 1123.
- * If 'wildcard' is ISC_TRUE then allow the first label of name to
- * be a wildcard.
- * The root is also accepted.
- *
- * Requires:
- *	'name' to be valid.
- */
-
-
-isc_boolean_t
-dns_name_ismailbox(const dns_name_t *name);
-/*%<
- * Return if 'name' is a valid mailbox.  RFC 821.
- *
- * Requires:
- * \li	'name' to be valid.
- */
-
-void
-dns_name_destroy(void);
-/*%<
- * Cleanup dns_name_settotextfilter() / dns_name_totext() state.
- *
- * This should be called as part of the final cleanup process.
- *
- * Note: dns_name_settotextfilter(NULL); should be called for all
- * threads which have called dns_name_settotextfilter() with a
- * non-NULL argument prior to calling dns_name_destroy();
- */
-
-isc_boolean_t
-dns_name_isdnssd(const dns_name_t *owner);
-/*%<
- * Determine if the 'owner' is a DNS-SD prefix.
- */
-
 #define DNS_NAME_INITABSOLUTE(A,B) { \
 	A, sizeof(A), sizeof(B), \
 	DNS_NAMEATTR_READONLY | DNS_NAMEATTR_ABSOLUTE, \
-	B, NULL, { (void *)-1, (void *)-1}, \
-	{NULL, NULL} \
-}
-
-#define DNS_NAME_INITNONABSOLUTE(A,B) { \
-	A, (sizeof(A) - 1), sizeof(B), \
-	DNS_NAMEATTR_READONLY, \
 	B, NULL, { (void *)-1, (void *)-1}, \
 	{NULL, NULL} \
 }

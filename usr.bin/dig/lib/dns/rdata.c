@@ -14,36 +14,26 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: rdata.c,v 1.9 2020/02/20 18:08:51 florian Exp $ */
+/* $Id: rdata.c,v 1.25 2020/02/25 12:37:15 florian Exp $ */
 
 /*! \file */
 
-
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <isc/base64.h>
 #include <isc/hex.h>
-#include <isc/lex.h>
-
-#include <isc/parseint.h>
-
-#include <string.h>
-
 #include <isc/util.h>
+#include <isc/buffer.h>
 
-#include <dns/callbacks.h>
 #include <dns/cert.h>
 #include <dns/compress.h>
-#include "enumtype.h"
-#include <dns/keyflags.h>
 #include <dns/keyvalues.h>
 #include <dns/rcode.h>
 #include <dns/rdata.h>
-#include "rdatastruct.h"
 #include <dns/rdatatype.h>
 #include <dns/result.h>
-#include <dns/secproto.h>
 #include <dns/time.h>
 #include <dns/ttl.h>
 
@@ -53,30 +43,6 @@
 		if (_r != ISC_R_SUCCESS) \
 			return (_r); \
 	} while (0)
-
-#define RETTOK(x) \
-	do { \
-		isc_result_t _r = (x); \
-		if (_r != ISC_R_SUCCESS) { \
-			isc_lex_ungettoken(lexer, &token); \
-			return (_r); \
-		} \
-	} while (0)
-
-#define CHECK(op)						\
-	do { result = (op);					\
-		if (result != ISC_R_SUCCESS) goto cleanup;	\
-	} while (0)
-
-#define CHECKTOK(op)						\
-	do { result = (op);					\
-		if (result != ISC_R_SUCCESS) {			\
-			isc_lex_ungettoken(lexer, &token);	\
-			goto cleanup;				\
-		}						\
-	} while (0)
-
-#define DNS_AS_STR(t) ((t).value.as_textregion.base)
 
 #define ARGS_TOTEXT	dns_rdata_t *rdata, dns_rdata_textctx_t *tctx, \
 			isc_buffer_t *target
@@ -88,8 +54,6 @@
 #define ARGS_TOWIRE	dns_rdata_t *rdata, dns_compress_t *cctx, \
 			isc_buffer_t *target
 
-#define ARGS_COMPARE	const dns_rdata_t *rdata1, const dns_rdata_t *rdata2
-
 #define ARGS_FROMSTRUCT	int rdclass, dns_rdatatype_t type, \
 			void *source, isc_buffer_t *target
 
@@ -97,15 +61,8 @@
 
 #define ARGS_FREESTRUCT void *source
 
-#define ARGS_ADDLDATA	dns_rdata_t *rdata, dns_additionaldatafunc_t add, \
-			void *arg
-
-#define ARGS_DIGEST	dns_rdata_t *rdata, dns_digestfunc_t digest, void *arg
-
 #define ARGS_CHECKOWNER dns_name_t *name, dns_rdataclass_t rdclass, \
 			dns_rdatatype_t type, isc_boolean_t wildcard
-
-#define ARGS_CHECKNAMES dns_rdata_t *rdata, dns_name_t *owner, dns_name_t *bad
 
 /*%
  * Context structure for the totext_ functions.
@@ -150,9 +107,6 @@ static isc_result_t
 uint16_tobuffer(uint32_t, isc_buffer_t *target);
 
 static isc_result_t
-uint8_tobuffer(uint32_t, isc_buffer_t *target);
-
-static isc_result_t
 name_tobuffer(dns_name_t *name, isc_buffer_t *target);
 
 static uint32_t
@@ -177,9 +131,6 @@ static isc_result_t
 rdata_totext(dns_rdata_t *rdata, dns_rdata_textctx_t *tctx,
 	     isc_buffer_t *target);
 
-static uint16_t
-uint16_consume_fromregion(isc_region_t *region);
-
 static isc_result_t
 unknown_totext(dns_rdata_t *rdata, dns_rdata_textctx_t *tctx,
 	       isc_buffer_t *target);
@@ -190,15 +141,6 @@ generic_totext_key(ARGS_TOTEXT);
 static inline isc_result_t
 generic_fromwire_key(ARGS_FROMWIRE);
 
-static inline isc_result_t
-generic_fromstruct_key(ARGS_FROMSTRUCT);
-
-static inline isc_result_t
-generic_tostruct_key(ARGS_TOSTRUCT);
-
-static inline void
-generic_freestruct_key(ARGS_FREESTRUCT);
-
 static isc_result_t
 generic_totext_txt(ARGS_TOTEXT);
 
@@ -206,54 +148,16 @@ static isc_result_t
 generic_fromwire_txt(ARGS_FROMWIRE);
 
 static isc_result_t
-generic_fromstruct_txt(ARGS_FROMSTRUCT);
-
-static isc_result_t
-generic_tostruct_txt(ARGS_TOSTRUCT);
-
-static void
-generic_freestruct_txt(ARGS_FREESTRUCT);
-
-static isc_result_t
 generic_totext_ds(ARGS_TOTEXT);
 
 static isc_result_t
-generic_tostruct_ds(ARGS_TOSTRUCT);
-
-static isc_result_t
 generic_fromwire_ds(ARGS_FROMWIRE);
-
-static isc_result_t
-generic_fromstruct_ds(ARGS_FROMSTRUCT);
 
 static isc_result_t
 generic_totext_tlsa(ARGS_TOTEXT);
 
 static isc_result_t
 generic_fromwire_tlsa(ARGS_FROMWIRE);
-
-static isc_result_t
-generic_fromstruct_tlsa(ARGS_FROMSTRUCT);
-
-static isc_result_t
-generic_tostruct_tlsa(ARGS_TOSTRUCT);
-
-static void
-generic_freestruct_tlsa(ARGS_FREESTRUCT);
-
-/*% INT16 Size */
-#define NS_INT16SZ	2
-/*% IPv6 Address Size */
-#define NS_LOCATORSZ	8
-
-/*
- * Active Diretory gc._msdcs.<forest> prefix.
- */
-static unsigned char gc_msdcs_data[]  = "\002gc\006_msdcs";
-static unsigned char gc_msdcs_offset [] = { 0, 3 };
-
-static dns_name_t const gc_msdcs =
-	DNS_NAME_INITNONABSOLUTE(gc_msdcs_data, gc_msdcs_offset);
 
 static inline isc_result_t
 name_duporclone(dns_name_t *source, dns_name_t *target) {
@@ -419,42 +323,6 @@ dns_rdata_clone(const dns_rdata_t *src, dns_rdata_t *target) {
 	target->rdclass = src->rdclass;
 	target->type = src->type;
 	target->flags = src->flags;
-}
-
-
-/***
- *** Comparisons
- ***/
-
-int
-dns_rdata_compare(const dns_rdata_t *rdata1, const dns_rdata_t *rdata2) {
-	int result = 0;
-	isc_boolean_t use_default = ISC_FALSE;
-
-	REQUIRE(rdata1 != NULL);
-	REQUIRE(rdata2 != NULL);
-	REQUIRE(rdata1->length == 0 || rdata1->data != NULL);
-	REQUIRE(rdata2->length == 0 || rdata2->data != NULL);
-	REQUIRE(DNS_RDATA_VALIDFLAGS(rdata1));
-	REQUIRE(DNS_RDATA_VALIDFLAGS(rdata2));
-
-	if (rdata1->rdclass != rdata2->rdclass)
-		return (rdata1->rdclass < rdata2->rdclass ? -1 : 1);
-
-	if (rdata1->type != rdata2->type)
-		return (rdata1->type < rdata2->type ? -1 : 1);
-
-	COMPARESWITCH
-
-	if (use_default) {
-		isc_region_t r1;
-		isc_region_t r2;
-
-		dns_rdata_toregion(rdata1, &r1);
-		dns_rdata_toregion(rdata2, &r2);
-		result = isc_region_compare(&r1, &r2);
-	}
-	return (result);
 }
 
 /***
@@ -726,28 +594,23 @@ dns_rdata_tofmttext(dns_rdata_t *rdata, dns_name_t *origin,
 }
 
 isc_result_t
-dns_rdata_fromstruct(dns_rdata_t *rdata, dns_rdataclass_t rdclass,
-		     dns_rdatatype_t type, void *source,
+dns_rdata_fromstruct_soa(dns_rdata_t *rdata, dns_rdataclass_t rdclass,
+		     dns_rdatatype_t type, dns_rdata_soa_t *soa,
 		     isc_buffer_t *target)
 {
 	isc_result_t result = ISC_R_NOTIMPLEMENTED;
 	isc_buffer_t st;
 	isc_region_t region;
-	isc_boolean_t use_default = ISC_FALSE;
 	unsigned int length;
 
-	REQUIRE(source != NULL);
+	REQUIRE(soa != NULL);
 	if (rdata != NULL) {
 		REQUIRE(DNS_RDATA_INITIALIZED(rdata));
 		REQUIRE(DNS_RDATA_VALIDFLAGS(rdata));
 	}
 
 	st = *target;
-
-	FROMSTRUCTSWITCH
-
-	if (use_default)
-		(void)NULL;
+	result = fromstruct_soa(rdclass, type, soa, target);
 
 	length = isc_buffer_usedlength(target) - isc_buffer_usedlength(&st);
 	if (result == ISC_R_SUCCESS && length > DNS_RDATA_MAXLENGTH)
@@ -764,43 +627,290 @@ dns_rdata_fromstruct(dns_rdata_t *rdata, dns_rdataclass_t rdclass,
 }
 
 isc_result_t
-dns_rdata_tostruct(const dns_rdata_t *rdata, void *target) {
+dns_rdata_fromstruct_tsig(dns_rdata_t *rdata, dns_rdataclass_t rdclass,
+		     dns_rdatatype_t type, dns_rdata_any_tsig_t *tsig,
+		     isc_buffer_t *target)
+{
 	isc_result_t result = ISC_R_NOTIMPLEMENTED;
-	isc_boolean_t use_default = ISC_FALSE;
+	isc_buffer_t st;
+	isc_region_t region;
+	unsigned int length;
 
+	REQUIRE(tsig != NULL);
+	if (rdata != NULL) {
+		REQUIRE(DNS_RDATA_INITIALIZED(rdata));
+		REQUIRE(DNS_RDATA_VALIDFLAGS(rdata));
+	}
+
+	st = *target;
+	result = fromstruct_any_tsig(rdclass, type, tsig, target);
+
+	length = isc_buffer_usedlength(target) - isc_buffer_usedlength(&st);
+	if (result == ISC_R_SUCCESS && length > DNS_RDATA_MAXLENGTH)
+		result = ISC_R_NOSPACE;
+
+	if (rdata != NULL && result == ISC_R_SUCCESS) {
+		region.base = isc_buffer_used(&st);
+		region.length = length;
+		dns_rdata_fromregion(rdata, rdclass, type, &region);
+	}
+	if (result != ISC_R_SUCCESS)
+		*target = st;
+	return (result);
+}
+
+isc_result_t
+dns_rdata_tostruct_cname(const dns_rdata_t *rdata, dns_rdata_cname_t *cname) {
 	REQUIRE(rdata != NULL);
 	REQUIRE(DNS_RDATA_VALIDFLAGS(rdata));
 
-	TOSTRUCTSWITCH
+	return (tostruct_cname(rdata, cname));
+}
 
-	if (use_default)
-		(void)NULL;
+isc_result_t
+dns_rdata_tostruct_ns(const dns_rdata_t *rdata, dns_rdata_ns_t *ns) {
+	REQUIRE(rdata != NULL);
+	REQUIRE(DNS_RDATA_VALIDFLAGS(rdata));
 
-	return (result);
+	return (tostruct_ns(rdata, ns));
+}
+
+isc_result_t
+dns_rdata_tostruct_soa(const dns_rdata_t *rdata, dns_rdata_soa_t *soa) {
+	REQUIRE(rdata != NULL);
+	REQUIRE(DNS_RDATA_VALIDFLAGS(rdata));
+
+	return (tostruct_soa(rdata, soa));
+}
+
+isc_result_t
+dns_rdata_tostruct_tsig(const dns_rdata_t *rdata, dns_rdata_any_tsig_t *tsig) {
+	REQUIRE(rdata != NULL);
+	REQUIRE(DNS_RDATA_VALIDFLAGS(rdata));
+
+	return (tostruct_any_tsig(rdata, tsig));
 }
 
 void
-dns_rdata_freestruct(void *source) {
-	dns_rdatacommon_t *common = source;
-	REQUIRE(source != NULL);
+dns_rdata_freestruct_cname(dns_rdata_cname_t *cname) {
+	REQUIRE(cname != NULL);
 
-	FREESTRUCTSWITCH
+	freestruct_cname(cname);
+}
+
+void
+dns_rdata_freestruct_ns(dns_rdata_ns_t *ns) {
+	REQUIRE(ns != NULL);
+
+	freestruct_ns(ns);
+}
+
+void
+dns_rdata_freestruct_soa(dns_rdata_soa_t *soa) {
+	REQUIRE(soa != NULL);
+
+	freestruct_soa(soa);
+}
+
+void
+dns_rdata_freestruct_tsig(dns_rdata_any_tsig_t *tsig) {
+	REQUIRE(tsig != NULL);
+
+	freestruct_any_tsig(tsig);
 }
 
 isc_boolean_t
-dns_rdata_checkowner(dns_name_t *name, dns_rdataclass_t rdclass,
+dns_rdata_checkowner_nsec3(dns_name_t *name, dns_rdataclass_t rdclass,
 		     dns_rdatatype_t type, isc_boolean_t wildcard)
 {
-	isc_boolean_t result;
-
-	CHECKOWNERSWITCH
-	return (result);
+	return checkowner_nsec3(name, rdclass, type, wildcard);
 }
 
 unsigned int
 dns_rdatatype_attributes(dns_rdatatype_t type)
 {
-	RDATATYPE_ATTRIBUTE_SW
+	switch (type) {
+	case 0:
+		return (DNS_RDATATYPEATTR_RESERVED);
+	case 1:
+		return (RRTYPE_A_ATTRIBUTES);
+	case 2:
+		return (RRTYPE_NS_ATTRIBUTES);
+	case 3:
+		return (RRTYPE_MD_ATTRIBUTES);
+	case 4:
+		return (RRTYPE_MF_ATTRIBUTES);
+	case 5:
+		return (RRTYPE_CNAME_ATTRIBUTES);
+	case 6:
+		return (RRTYPE_SOA_ATTRIBUTES);
+	case 7:
+		return (RRTYPE_MB_ATTRIBUTES);
+	case 8:
+		return (RRTYPE_MG_ATTRIBUTES);
+	case 9:
+		return (RRTYPE_MR_ATTRIBUTES);
+	case 10:
+		return (RRTYPE_NULL_ATTRIBUTES);
+	case 11:
+		return (RRTYPE_WKS_ATTRIBUTES);
+	case 12:
+		return (RRTYPE_PTR_ATTRIBUTES);
+	case 13:
+		return (RRTYPE_HINFO_ATTRIBUTES);
+	case 14:
+		return (RRTYPE_MINFO_ATTRIBUTES);
+	case 15:
+		return (RRTYPE_MX_ATTRIBUTES);
+	case 16:
+		return (RRTYPE_TXT_ATTRIBUTES);
+	case 17:
+		return (RRTYPE_RP_ATTRIBUTES);
+	case 18:
+		return (RRTYPE_AFSDB_ATTRIBUTES);
+	case 19:
+		return (RRTYPE_X25_ATTRIBUTES);
+	case 20:
+		return (RRTYPE_ISDN_ATTRIBUTES);
+	case 21:
+		return (RRTYPE_RT_ATTRIBUTES);
+	case 22:
+		return (RRTYPE_NSAP_ATTRIBUTES);
+	case 23:
+		return (RRTYPE_NSAP_PTR_ATTRIBUTES);
+	case 24:
+		return (RRTYPE_SIG_ATTRIBUTES);
+	case 25:
+		return (RRTYPE_KEY_ATTRIBUTES);
+	case 26:
+		return (RRTYPE_PX_ATTRIBUTES);
+	case 27:
+		return (RRTYPE_GPOS_ATTRIBUTES);
+	case 28:
+		return (RRTYPE_AAAA_ATTRIBUTES);
+	case 29:
+		return (RRTYPE_LOC_ATTRIBUTES);
+	case 30:
+		return (RRTYPE_NXT_ATTRIBUTES);
+	case 31:
+		return (DNS_RDATATYPEATTR_RESERVED);
+	case 32:
+		return (DNS_RDATATYPEATTR_RESERVED);
+	case 33:
+		return (RRTYPE_SRV_ATTRIBUTES);
+	case 34:
+		return (DNS_RDATATYPEATTR_RESERVED);
+	case 35:
+		return (RRTYPE_NAPTR_ATTRIBUTES);
+	case 36:
+		return (RRTYPE_KX_ATTRIBUTES);
+	case 37:
+		return (RRTYPE_CERT_ATTRIBUTES);
+	case 38:
+		return (RRTYPE_A6_ATTRIBUTES);
+	case 39:
+		return (RRTYPE_DNAME_ATTRIBUTES);
+	case 40:
+		return (RRTYPE_SINK_ATTRIBUTES);
+	case 41:
+		return (RRTYPE_OPT_ATTRIBUTES);
+	case 42:
+		return (RRTYPE_APL_ATTRIBUTES);
+	case 43:
+		return (RRTYPE_DS_ATTRIBUTES);
+	case 44:
+		return (RRTYPE_SSHFP_ATTRIBUTES);
+	case 45:
+		return (RRTYPE_IPSECKEY_ATTRIBUTES);
+	case 46:
+		return (RRTYPE_RRSIG_ATTRIBUTES);
+	case 47:
+		return (RRTYPE_NSEC_ATTRIBUTES);
+	case 48:
+		return (RRTYPE_DNSKEY_ATTRIBUTES);
+	case 49:
+		return (RRTYPE_DHCID_ATTRIBUTES);
+	case 50:
+		return (RRTYPE_NSEC3_ATTRIBUTES);
+	case 51:
+		return (RRTYPE_NSEC3PARAM_ATTRIBUTES);
+	case 52:
+		return (RRTYPE_TLSA_ATTRIBUTES);
+	case 53:
+		return (RRTYPE_SMIMEA_ATTRIBUTES);
+	case 55:
+		return (RRTYPE_HIP_ATTRIBUTES);
+	case 56:
+		return (RRTYPE_NINFO_ATTRIBUTES);
+	case 57:
+		return (RRTYPE_RKEY_ATTRIBUTES);
+	case 58:
+		return (RRTYPE_TALINK_ATTRIBUTES);
+	case 59:
+		return (RRTYPE_CDS_ATTRIBUTES);
+	case 60:
+		return (RRTYPE_CDNSKEY_ATTRIBUTES);
+	case 61:
+		return (RRTYPE_OPENPGPKEY_ATTRIBUTES);
+	case 62:
+		return (RRTYPE_CSYNC_ATTRIBUTES);
+	case 99:
+		return (RRTYPE_SPF_ATTRIBUTES);
+	case 100:
+		return (DNS_RDATATYPEATTR_RESERVED);
+	case 101:
+		return (DNS_RDATATYPEATTR_RESERVED);
+	case 102:
+		return (DNS_RDATATYPEATTR_RESERVED);
+	case 103:
+		return (RRTYPE_UNSPEC_ATTRIBUTES);
+	case 104:
+		return (RRTYPE_NID_ATTRIBUTES);
+	case 105:
+		return (RRTYPE_L32_ATTRIBUTES);
+	case 106:
+		return (RRTYPE_L64_ATTRIBUTES);
+	case 107:
+		return (RRTYPE_LP_ATTRIBUTES);
+	case 108:
+		return (RRTYPE_EUI48_ATTRIBUTES);
+	case 109:
+		return (RRTYPE_EUI64_ATTRIBUTES);
+	case 249:
+		return (RRTYPE_TKEY_ATTRIBUTES);
+	case 250:
+		return (RRTYPE_TSIG_ATTRIBUTES);
+	case 251:
+		return (DNS_RDATATYPEATTR_META |
+		    DNS_RDATATYPEATTR_QUESTIONONLY);
+	case 252:
+		return (DNS_RDATATYPEATTR_META |
+		    DNS_RDATATYPEATTR_QUESTIONONLY);
+	case 253:
+		return (DNS_RDATATYPEATTR_META |
+		    DNS_RDATATYPEATTR_QUESTIONONLY);
+	case 254:
+		return (DNS_RDATATYPEATTR_META |
+		    DNS_RDATATYPEATTR_QUESTIONONLY);
+	case 255:
+		return (DNS_RDATATYPEATTR_META |
+		    DNS_RDATATYPEATTR_QUESTIONONLY);
+	case 256:
+		return (RRTYPE_URI_ATTRIBUTES);
+	case 257:
+		return (RRTYPE_CAA_ATTRIBUTES);
+	case 258:
+		return (RRTYPE_AVC_ATTRIBUTES);
+	case 259:
+		return (RRTYPE_DOA_ATTRIBUTES);
+	case 32768:
+		return (RRTYPE_TA_ATTRIBUTES);
+	case 32769:
+		return (RRTYPE_DLV_ATTRIBUTES);
+	case 65533:
+		return (RRTYPE_KEYDATA_ATTRIBUTES);
+	}
+
 	if (type >= (dns_rdatatype_t)128 && type < (dns_rdatatype_t)255)
 		return (DNS_RDATATYPEATTR_UNKNOWN | DNS_RDATATYPEATTR_META);
 	return (DNS_RDATATYPEATTR_UNKNOWN);
@@ -855,9 +965,183 @@ isc_result_t
 dns_rdatatype_totext(dns_rdatatype_t type, isc_buffer_t *target) {
 	char buf[sizeof("TYPE65535")];
 
-	RDATATYPE_TOTEXT_SW
-	snprintf(buf, sizeof(buf), "TYPE%u", type);
-	return (str_totext(buf, target));
+	switch (type) {
+	case 0:
+		return (str_totext("RESERVED0", target));
+	case 1:
+		return (str_totext("A", target));
+	case 2:
+		return (str_totext("NS", target));
+	case 3:
+		return (str_totext("MD", target));
+	case 4:
+		return (str_totext("MF", target));
+	case 5:
+		return (str_totext("CNAME", target));
+	case 6:
+		return (str_totext("SOA", target));
+	case 7:
+		return (str_totext("MB", target));
+	case 8:
+		return (str_totext("MG", target));
+	case 9:
+		return (str_totext("MR", target));
+	case 10:
+		return (str_totext("NULL", target));
+	case 11:
+		return (str_totext("WKS", target));
+	case 12:
+		return (str_totext("PTR", target));
+	case 13:
+		return (str_totext("HINFO", target));
+	case 14:
+		return (str_totext("MINFO", target));
+	case 15:
+		return (str_totext("MX", target));
+	case 16:
+		return (str_totext("TXT", target));
+	case 17:
+		return (str_totext("RP", target));
+	case 18:
+		return (str_totext("AFSDB", target));
+	case 19:
+		return (str_totext("X25", target));
+	case 20:
+		return (str_totext("ISDN", target));
+	case 21:
+		return (str_totext("RT", target));
+	case 22:
+		return (str_totext("NSAP", target));
+	case 23:
+		return (str_totext("NSAP-PTR", target));
+	case 24:
+		return (str_totext("SIG", target));
+	case 25:
+		return (str_totext("KEY", target));
+	case 26:
+		return (str_totext("PX", target));
+	case 27:
+		return (str_totext("GPOS", target));
+	case 28:
+		return (str_totext("AAAA", target));
+	case 29:
+		return (str_totext("LOC", target));
+	case 30:
+		return (str_totext("NXT", target));
+	case 31:
+		return (str_totext("EID", target));
+	case 32:
+		return (str_totext("NIMLOC", target));
+	case 33:
+		return (str_totext("SRV", target));
+	case 34:
+		return (str_totext("ATMA", target));
+	case 35:
+		return (str_totext("NAPTR", target));
+	case 36:
+		return (str_totext("KX", target));
+	case 37:
+		return (str_totext("CERT", target));
+	case 38:
+		return (str_totext("A6", target));
+	case 39:
+		return (str_totext("DNAME", target));
+	case 40:
+		return (str_totext("SINK", target));
+	case 41:
+		return (str_totext("OPT", target));
+	case 42:
+		return (str_totext("APL", target));
+	case 43:
+		return (str_totext("DS", target));
+	case 44:
+		return (str_totext("SSHFP", target));
+	case 45:
+		return (str_totext("IPSECKEY", target));
+	case 46:
+		return (str_totext("RRSIG", target));
+	case 47:
+		return (str_totext("NSEC", target));
+	case 48:
+		return (str_totext("DNSKEY", target));
+	case 49:
+		return (str_totext("DHCID", target));
+	case 50:
+		return (str_totext("NSEC3", target));
+	case 51:
+		return (str_totext("NSEC3PARAM", target));
+	case 52:
+		return (str_totext("TLSA", target));
+	case 53:
+		return (str_totext("SMIMEA", target));
+	case 55:
+		return (str_totext("HIP", target));
+	case 56:
+		return (str_totext("NINFO", target));
+	case 57:
+		return (str_totext("RKEY", target));
+	case 58:
+		return (str_totext("TALINK", target));
+	case 59:
+		return (str_totext("CDS", target));
+	case 60:
+		return (str_totext("CDNSKEY", target));
+	case 61:
+		return (str_totext("OPENPGPKEY", target));
+	case 62:
+		return (str_totext("CSYNC", target));
+	case 99:
+		return (str_totext("SPF", target));
+	case 100:
+		return (str_totext("UINFO", target));
+	case 101:
+		return (str_totext("UID", target));
+	case 102:
+		return (str_totext("GID", target));
+	case 103:
+		return (str_totext("UNSPEC", target));
+	case 104:
+		return (str_totext("NID", target));
+	case 105:
+		return (str_totext("L32", target));
+	case 106:
+		return (str_totext("L64", target));
+	case 107:
+		return (str_totext("LP", target));
+	case 108:
+		return (str_totext("EUI48", target));
+	case 109:
+		return (str_totext("EUI64", target));
+	case 249:
+		return (str_totext("TKEY", target));
+	case 250:
+		return (str_totext("TSIG", target));
+	case 251:
+		return (str_totext("IXFR", target));
+	case 252:
+		return (str_totext("AXFR", target));
+	case 253:
+		return (str_totext("MAILB", target));
+	case 254:
+		return (str_totext("MAILA", target));
+	case 255:
+		return (str_totext("ANY", target));
+	case 256:
+		return (str_totext("URI", target));
+	case 257:
+		return (str_totext("CAA", target));
+	case 258:
+		return (str_totext("AVC", target));
+	case 259:
+		return (str_totext("DOA", target));
+	case 32768:
+		return (str_totext("TA", target));
+	case 32769:
+		return (str_totext("DLV", target));
+	default:
+		snprintf(buf, sizeof(buf), "TYPE%u", type);
+		return (str_totext(buf, target));
+	}
 }
 
 void
@@ -1137,19 +1421,6 @@ uint16_tobuffer(uint32_t value, isc_buffer_t *target) {
 }
 
 static isc_result_t
-uint8_tobuffer(uint32_t value, isc_buffer_t *target) {
-	isc_region_t region;
-
-	if (value > 0xff)
-		return (ISC_R_RANGE);
-	isc_buffer_availableregion(target, &region);
-	if (region.length < 1)
-		return (ISC_R_NOSPACE);
-	isc_buffer_putuint8(target, (uint8_t)value);
-	return (ISC_R_SUCCESS);
-}
-
-static isc_result_t
 name_tobuffer(dns_name_t *name, isc_buffer_t *target) {
 	isc_region_t r;
 	dns_name_toregion(name, &r);
@@ -1166,14 +1437,6 @@ uint32_fromregion(isc_region_t *region) {
 	value |= region->base[2] << 8;
 	value |= region->base[3];
 	return(value);
-}
-
-static uint16_t
-uint16_consume_fromregion(isc_region_t *region) {
-	uint16_t r = uint16_fromregion(region);
-
-	isc_region_consume(region, 2);
-	return r;
 }
 
 static uint16_t
@@ -1233,7 +1496,6 @@ static const char atob_digits[86] =
  * Modified to be re-entrant 3/2/99.
  */
 
-
 struct state {
 	int32_t Ceor;
 	int32_t Csum;
@@ -1247,8 +1509,6 @@ struct state {
 #define Crot state->Crot
 #define word state->word
 #define bcount state->bcount
-
-#define times85(x)	((((((x<<2)+x)<<2)+x)<<2)+x)
 
 static isc_result_t	byte_btoa(int c, isc_buffer_t *, struct state *state);
 
@@ -1317,7 +1577,6 @@ byte_btoa(int c, isc_buffer_t *target, struct state *state) {
 	return (ISC_R_SUCCESS);
 }
 
-
 /*
  * Encode the binary data from inbuf, of length inbuflen, into a
  * target.  Return success/failure status
@@ -1348,29 +1607,6 @@ dns_rdata_covers(dns_rdata_t *rdata) {
 	if (rdata->type == dns_rdatatype_rrsig)
 		return (covers_rrsig(rdata));
 	return (covers_sig(rdata));
-}
-
-isc_boolean_t
-dns_rdatatype_ismeta(dns_rdatatype_t type) {
-	if ((dns_rdatatype_attributes(type) & DNS_RDATATYPEATTR_META) != 0)
-		return (ISC_TRUE);
-	return (ISC_FALSE);
-}
-
-isc_boolean_t
-dns_rdatatype_issingleton(dns_rdatatype_t type) {
-	if ((dns_rdatatype_attributes(type) & DNS_RDATATYPEATTR_SINGLETON)
-	    != 0)
-		return (ISC_TRUE);
-	return (ISC_FALSE);
-}
-
-isc_boolean_t
-dns_rdatatype_questiononly(dns_rdatatype_t type) {
-	if ((dns_rdatatype_attributes(type) & DNS_RDATATYPEATTR_QUESTIONONLY)
-	    != 0)
-		return (ISC_TRUE);
-	return (ISC_FALSE);
 }
 
 isc_boolean_t

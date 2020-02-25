@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: soa_6.c,v 1.2 2020/02/20 18:08:51 florian Exp $ */
+/* $Id: soa_6.c,v 1.6 2020/02/25 05:00:43 jsg Exp $ */
 
 /* Reviewed: Thu Mar 16 15:18:32 PST 2000 by explorer */
 
@@ -46,7 +46,6 @@ totext_soa(ARGS_TOTEXT) {
 		comm = ISC_TF((tctx->flags & DNS_STYLEFLAG_RRCOMMENT) != 0);
 	else
 		comm = ISC_FALSE;
-
 
 	dns_name_init(&mname, NULL);
 	dns_name_init(&rname, NULL);
@@ -170,52 +169,6 @@ towire_soa(ARGS_TOWIRE) {
 	return (ISC_R_SUCCESS);
 }
 
-static inline int
-compare_soa(ARGS_COMPARE) {
-	isc_region_t region1;
-	isc_region_t region2;
-	dns_name_t name1;
-	dns_name_t name2;
-	int order;
-
-	REQUIRE(rdata1->type == rdata2->type);
-	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == dns_rdatatype_soa);
-	REQUIRE(rdata1->length != 0);
-	REQUIRE(rdata2->length != 0);
-
-	dns_name_init(&name1, NULL);
-	dns_name_init(&name2, NULL);
-
-	dns_rdata_toregion(rdata1, &region1);
-	dns_rdata_toregion(rdata2, &region2);
-
-	dns_name_fromregion(&name1, &region1);
-	dns_name_fromregion(&name2, &region2);
-
-	order = dns_name_rdatacompare(&name1, &name2);
-	if (order != 0)
-		return (order);
-
-	isc_region_consume(&region1, name_length(&name1));
-	isc_region_consume(&region2, name_length(&name2));
-
-	dns_name_init(&name1, NULL);
-	dns_name_init(&name2, NULL);
-
-	dns_name_fromregion(&name1, &region1);
-	dns_name_fromregion(&name2, &region2);
-
-	order = dns_name_rdatacompare(&name1, &name2);
-	if (order != 0)
-		return (order);
-
-	isc_region_consume(&region1, name_length(&name1));
-	isc_region_consume(&region2, name_length(&name2));
-
-	return (isc_region_compare(&region1, &region2));
-}
-
 static inline isc_result_t
 fromstruct_soa(ARGS_FROMSTRUCT) {
 	dns_rdata_soa_t *soa = source;
@@ -254,7 +207,6 @@ tostruct_soa(ARGS_TOSTRUCT) {
 	soa->common.rdclass = rdata->rdclass;
 	soa->common.rdtype = rdata->type;
 	ISC_LINK_INIT(&soa->common, link);
-
 
 	dns_rdata_toregion(rdata, &region);
 
@@ -301,84 +253,6 @@ freestruct_soa(ARGS_FREESTRUCT) {
 
 	dns_name_free(&soa->origin);
 	dns_name_free(&soa->contact);
-}
-
-static inline isc_result_t
-additionaldata_soa(ARGS_ADDLDATA) {
-	UNUSED(rdata);
-	UNUSED(add);
-	UNUSED(arg);
-
-	REQUIRE(rdata->type == dns_rdatatype_soa);
-
-	return (ISC_R_SUCCESS);
-}
-
-static inline isc_result_t
-digest_soa(ARGS_DIGEST) {
-	isc_region_t r;
-	dns_name_t name;
-
-	REQUIRE(rdata->type == dns_rdatatype_soa);
-
-	dns_rdata_toregion(rdata, &r);
-
-	dns_name_init(&name, NULL);
-	dns_name_fromregion(&name, &r);
-	RETERR(dns_name_digest(&name, digest, arg));
-	isc_region_consume(&r, name_length(&name));
-
-	dns_name_init(&name, NULL);
-	dns_name_fromregion(&name, &r);
-	RETERR(dns_name_digest(&name, digest, arg));
-	isc_region_consume(&r, name_length(&name));
-
-	return ((digest)(arg, &r));
-}
-
-static inline isc_boolean_t
-checkowner_soa(ARGS_CHECKOWNER) {
-
-	REQUIRE(type == dns_rdatatype_soa);
-
-	UNUSED(name);
-	UNUSED(type);
-	UNUSED(rdclass);
-	UNUSED(wildcard);
-
-	return (ISC_TRUE);
-}
-
-static inline isc_boolean_t
-checknames_soa(ARGS_CHECKNAMES) {
-	isc_region_t region;
-	dns_name_t name;
-
-	REQUIRE(rdata->type == dns_rdatatype_soa);
-
-	UNUSED(owner);
-
-	dns_rdata_toregion(rdata, &region);
-	dns_name_init(&name, NULL);
-	dns_name_fromregion(&name, &region);
-	if (!dns_name_ishostname(&name, ISC_FALSE)) {
-		if (bad != NULL)
-			dns_name_clone(&name, bad);
-		return (ISC_FALSE);
-	}
-	isc_region_consume(&region, name_length(&name));
-	dns_name_fromregion(&name, &region);
-	if (!dns_name_ismailbox(&name)) {
-		if (bad != NULL)
-			dns_name_clone(&name, bad);
-		return (ISC_FALSE);
-	}
-	return (ISC_TRUE);
-}
-
-static inline int
-casecompare_soa(ARGS_COMPARE) {
-	return (compare_soa(rdata1, rdata2));
 }
 
 #endif	/* RDATA_GENERIC_SOA_6_C */

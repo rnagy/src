@@ -34,11 +34,6 @@
 		abort(); \
 	}
 
-#define FROMTEXTARGS "rdclass, type, lexer, origin, options, target, callbacks"
-#define FROMTEXTCLASS "rdclass"
-#define FROMTEXTTYPE "type"
-#define FROMTEXTDEF "result = DNS_R_UNKNOWN"
-
 #define TOTEXTARGS "rdata, tctx, target"
 #define TOTEXTCLASS "rdata->rdclass"
 #define TOTEXTTYPE "rdata->type"
@@ -53,46 +48,6 @@
 #define TOWIRECLASS "rdata->rdclass"
 #define TOWIRETYPE "rdata->type"
 #define TOWIREDEF "use_default = ISC_TRUE"
-
-#define FROMSTRUCTARGS "rdclass, type, source, target"
-#define FROMSTRUCTCLASS "rdclass"
-#define FROMSTRUCTTYPE "type"
-#define FROMSTRUCTDEF "use_default = ISC_TRUE"
-
-#define TOSTRUCTARGS "rdata, target"
-#define TOSTRUCTCLASS "rdata->rdclass"
-#define TOSTRUCTTYPE "rdata->type"
-#define TOSTRUCTDEF "use_default = ISC_TRUE"
-
-#define FREESTRUCTARGS "source"
-#define FREESTRUCTCLASS "common->rdclass"
-#define FREESTRUCTTYPE "common->rdtype"
-#define FREESTRUCTDEF NULL
-
-#define COMPAREARGS "rdata1, rdata2"
-#define COMPARECLASS "rdata1->rdclass"
-#define COMPARETYPE "rdata1->type"
-#define COMPAREDEF "use_default = ISC_TRUE"
-
-#define ADDITIONALDATAARGS "rdata, add, arg"
-#define ADDITIONALDATACLASS "rdata->rdclass"
-#define ADDITIONALDATATYPE "rdata->type"
-#define ADDITIONALDATADEF "use_default = ISC_TRUE"
-
-#define DIGESTARGS "rdata, digest, arg"
-#define DIGESTCLASS "rdata->rdclass"
-#define DIGESTTYPE "rdata->type"
-#define DIGESTDEF "use_default = ISC_TRUE"
-
-#define CHECKOWNERARGS "name, rdclass, type, wildcard"
-#define CHECKOWNERCLASS "rdclass"
-#define CHECKOWNERTYPE "type"
-#define CHECKOWNERDEF "result = ISC_TRUE"
-
-#define CHECKNAMESARGS "rdata, owner, bad"
-#define CHECKNAMESCLASS "rdata->rdclass"
-#define CHECKNAMESTYPE "rdata->type"
-#define CHECKNAMESDEF "result = ISC_TRUE"
 
 static const char copyright[] =
 "/*\n"
@@ -651,29 +606,6 @@ main(int argc, char **argv) {
 			 FROMWIRETYPE, FROMWIRECLASS, FROMWIREDEF);
 		doswitch("TOWIRESWITCH", "towire", TOWIREARGS,
 			 TOWIRETYPE, TOWIRECLASS, TOWIREDEF);
-		doswitch("COMPARESWITCH", "compare", COMPAREARGS,
-			  COMPARETYPE, COMPARECLASS, COMPAREDEF);
-		doswitch("CASECOMPARESWITCH", "casecompare", COMPAREARGS,
-			  COMPARETYPE, COMPARECLASS, COMPAREDEF);
-		doswitch("FROMSTRUCTSWITCH", "fromstruct", FROMSTRUCTARGS,
-			  FROMSTRUCTTYPE, FROMSTRUCTCLASS, FROMSTRUCTDEF);
-		doswitch("TOSTRUCTSWITCH", "tostruct", TOSTRUCTARGS,
-			  TOSTRUCTTYPE, TOSTRUCTCLASS, TOSTRUCTDEF);
-		doswitch("FREESTRUCTSWITCH", "freestruct", FREESTRUCTARGS,
-			  FREESTRUCTTYPE, FREESTRUCTCLASS, FREESTRUCTDEF);
-		doswitch("ADDITIONALDATASWITCH", "additionaldata",
-			 ADDITIONALDATAARGS, ADDITIONALDATATYPE,
-			 ADDITIONALDATACLASS, ADDITIONALDATADEF);
-		doswitch("DIGESTSWITCH", "digest",
-			 DIGESTARGS, DIGESTTYPE,
-			 DIGESTCLASS, DIGESTDEF);
-		doswitch("CHECKOWNERSWITCH", "checkowner",
-			CHECKOWNERARGS, CHECKOWNERTYPE,
-			CHECKOWNERCLASS, CHECKOWNERDEF);
-		doswitch("CHECKNAMESSWITCH", "checknames",
-			CHECKNAMESARGS, CHECKNAMESTYPE,
-			CHECKNAMESCLASS, CHECKNAMESDEF);
-
 		/*
 		 * From here down, we are processing the rdata names and
 		 * attributes.
@@ -757,37 +689,6 @@ main(int argc, char **argv) {
 				}
 			}
 			fprintf(stdout, "\t\t\tbreak; \\\n");
-		}
-		fprintf(stdout, "\t}\n");
-
-		fprintf(stdout, "#define RDATATYPE_ATTRIBUTE_SW \\\n");
-		fprintf(stdout, "\tswitch (type) { \\\n");
-		for (i = 0; i <= maxtype; i++) {
-			ttn = find_typename(i);
-			if (ttn == NULL)
-				continue;
-			fprintf(stdout, "\tcase %d: return (%s); \\\n",
-				i, upper(ttn->attr));
-		}
-		fprintf(stdout, "\t}\n");
-
-		fprintf(stdout, "#define RDATATYPE_TOTEXT_SW \\\n");
-		fprintf(stdout, "\tswitch (type) { \\\n");
-		for (i = 0; i <= maxtype; i++) {
-			ttn = find_typename(i);
-			if (ttn == NULL)
-				continue;
-			/*
-			 * Remove KEYDATA (65533) from the type to memonic
-			 * translation as it is internal use only.  This
-			 * stops the tools from displaying KEYDATA instead
-			 * of TYPE65533.
-			 */
-			if (i == 65533U)
-				continue;
-			fprintf(stdout, "\tcase %d: return "
-				"(str_totext(\"%s\", target)); \\\n",
-				i, upper(ttn->typename));
 		}
 		fprintf(stdout, "\t}\n");
 
