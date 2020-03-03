@@ -215,6 +215,8 @@ rasops_init(struct rasops_info *ri, int wantrows, int wantcols)
 
 		wsfont_init();
 
+		cookie = wsfont_find(NULL, 8, 0, 0);
+#if 0
 		if (ri->ri_width >= 120 * 32)
 			/* Screen width larger than 3840px, 32px wide font */
 			cookie = wsfont_find(NULL, 32, 0, 0);
@@ -233,7 +235,7 @@ rasops_init(struct rasops_info *ri, int wantrows, int wantcols)
 
 		if (cookie <= 0)
 			cookie = wsfont_find(NULL, 0, 0, 0);
-
+#endif
 		if (cookie <= 0) {
 			printf("rasops_init: font table is empty\n");
 			return (-1);
