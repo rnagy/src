@@ -1,4 +1,4 @@
-# $OpenBSD: GENERIC,v 1.142 2020/02/21 15:53:09 patrick Exp $
+# $OpenBSD: GENERIC,v 1.144 2020/03/02 11:11:09 kettenis Exp $
 #
 # GENERIC machine description file
 #
@@ -194,6 +194,7 @@ rkpinctrl*	at fdt? early 1
 #rkdrm*		at fdt?
 #drm*		at rkdrm?
 #wsdisplay*	at rkdrm?
+#rkdwhdmi*	at fdt?
 rkemmcphy*	at fdt?
 rkgpio*		at fdt?
 rkiic*		at fdt?
@@ -243,6 +244,10 @@ rge*		at pci?			# Realtek 8125
 ahci*		at pci? flags 0x0000	# AHCI SATA controllers
 					# flags 0x0001 to force SATA 1 (1.5Gb/s)
 nvme*		at pci?			# NVMe controllers
+mpi*		at pci?			# LSI Logic Fusion MPT Message Passing Interface
+mpii*		at pci?			# LSI Fusion MPT Message Passing Interface II
+mfi*		at pci?			# LSI MegaRAID SAS controllers
+mfii*		at pci?			# LSI MegaRAID SAS Fusion controller
 
 # USB Controllers
 ohci*		at pci?			# Open Host Controller
