@@ -404,10 +404,12 @@ is_anon:	/* label for SunOS style /dev/zero */
 		if ((flags & __MAP_NOFAULT) != 0)
 			return EINVAL;
 
-		limit = lim_cur(RLIMIT_DATA);
-		if (limit < size ||
-		    limit - size < ptoa(p->p_vmspace->vm_dused)) {
-			return ENOMEM;
+		if (prot != PROT_NONE) {
+			limit = lim_cur(RLIMIT_DATA);
+			if (limit < size ||
+			    limit - size < ptoa(p->p_vmspace->vm_dused)) {
+				return ENOMEM;
+			}
 		}
 
 		/*
