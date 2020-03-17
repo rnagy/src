@@ -1,4 +1,4 @@
-/* $OpenBSD: t1_enc.c,v 1.120 2020/03/12 17:09:02 jsing Exp $ */
+/* $OpenBSD: t1_enc.c,v 1.122 2020/03/16 15:25:14 tb Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -336,10 +336,14 @@ tls1_aead_ctx_init(SSL_AEAD_CTX **aead_ctx)
 
 static int
 tls1_change_cipher_state_aead(SSL *s, char is_read, const unsigned char *key,
-    unsigned key_len, const unsigned char *iv, unsigned iv_len)
+    unsigned int key_len, const unsigned char *iv, unsigned int iv_len)
 {
 	const EVP_AEAD *aead = S3I(s)->tmp.new_aead;
 	SSL_AEAD_CTX *aead_ctx;
+
+	/* XXX - Need to avoid clearing write state for DTLS. */
+	if (SSL_IS_DTLS(s))
+		return 0;
 
 	if (is_read) {
 		ssl_clear_cipher_read_state(s);
@@ -347,7 +351,6 @@ tls1_change_cipher_state_aead(SSL *s, char is_read, const unsigned char *key,
 			return 0;
 		aead_ctx = s->internal->aead_read_ctx;
 	} else {
-		/* XXX - Need to correctly handle DTLS. */
 		ssl_clear_cipher_write_state(s);
 		if (!tls1_aead_ctx_init(&s->internal->aead_write_ctx))
 			return 0;
