@@ -1,4 +1,4 @@
-/*	$OpenBSD: iked.h,v 1.136 2020/03/10 18:54:52 tobhe Exp $	*/
+/*	$OpenBSD: iked.h,v 1.138 2020/03/31 20:19:51 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -892,6 +892,7 @@ void	 ikev2_disable_rekeying(struct iked *, struct iked_sa *);
 int	 ikev2_rekey_sa(struct iked *, struct iked_spi *);
 int	 ikev2_drop_sa(struct iked *, struct iked_spi *);
 int	 ikev2_print_id(struct iked_id *, char *, size_t);
+int	 ikev2_print_static_id(struct iked_static_id *, char *, size_t);
 
 const char	*ikev2_ikesa_info(uint64_t, const char *msg);
 #define SPI_IH(hdr)      ikev2_ikesa_info(betoh64((hdr)->ike_ispi), NULL)
@@ -983,6 +984,7 @@ void	 ca_sslerror(const char *);
 char	*ca_asn1_name(uint8_t *, size_t);
 char	*ca_x509_name(void *);
 void	*ca_x509_name_parse(char *);
+void	 ca_cert_info(const char *, X509 *);
 
 /* timer.c */
 void	 timer_set(struct iked *, struct iked_timer *,
