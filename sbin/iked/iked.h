@@ -1,4 +1,4 @@
-/*	$OpenBSD: iked.h,v 1.138 2020/03/31 20:19:51 tobhe Exp $	*/
+/*	$OpenBSD: iked.h,v 1.140 2020/04/02 19:44:41 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -595,6 +595,7 @@ struct iked_message {
 #define IKED_MSG_FLAGS_AUTHENTICATION_FAILED		0x0020
 #define IKED_MSG_FLAGS_INVALID_KE			0x0040
 #define IKED_MSG_FLAGS_IPCOMP_SUPPORTED			0x0080
+#define IKED_MSG_FLAGS_USE_TRANSPORT			0x0100
 
 
 struct iked_user {
@@ -971,7 +972,7 @@ void	 pfkey_init(struct iked *, int fd);
 /* ca.c */
 pid_t	 caproc(struct privsep *, struct privsep_proc *);
 int	 ca_setreq(struct iked *, struct iked_sa *, struct iked_static_id *,
-	    uint8_t, uint8_t *, size_t, enum privsep_procid);
+	    uint8_t, uint8_t, uint8_t *, size_t, enum privsep_procid);
 int	 ca_setcert(struct iked *, struct iked_sahdr *, struct iked_id *,
 	    uint8_t, uint8_t *, size_t, enum privsep_procid);
 int	 ca_setauth(struct iked *, struct iked_sa *,

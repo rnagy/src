@@ -1,4 +1,4 @@
-/*	$OpenBSD: ikev2.c,v 1.207 2020/03/31 20:19:51 tobhe Exp $	*/
+/*	$OpenBSD: ikev2.c,v 1.210 2020/04/04 20:36:34 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -688,8 +688,14 @@ ikev2_ike_auth_recv(struct iked *env, struct iked_sa *sa,
 		struct iked_policy	*old = sa->sa_policy;
 
 		sa->sa_policy = NULL;
-		if (policy_lookup(env, msg, &sa->sa_proposals) == 0 && msg->msg_policy &&
-		    msg->msg_policy != old) {
+		if (policy_lookup(env, msg, &sa->sa_proposals) != 0 ||
+		    msg->msg_policy == NULL) {
+			log_info("%s: no compatible policy found",
+			    SPI_SA(sa, __func__));
+			ikev2_send_auth_failed(env, sa);
+			return (-1);
+		}
+		if (msg->msg_policy != old) {
 			/* move sa to new policy */
 			policy = sa->sa_policy = msg->msg_policy;
 			TAILQ_REMOVE(&old->pol_sapeers, sa, sa_peer_entry);
@@ -850,7 +856,7 @@ ikev2_ike_auth(struct iked *env, struct iked_sa *sa)
 			else
 				certreqtype = env->sc_certreqtype;
 			return (ca_setreq(env, sa,
-			    &pol->pol_localid, certreqtype,
+			    &pol->pol_localid, certreqtype, 0,
 			    ibuf_data(env->sc_certreq),
 			    ibuf_size(env->sc_certreq), PROC_CERT));
 		} else if ((sa->sa_stateflags & IKED_REQ_CERT) == 0)
@@ -2616,6 +2622,9 @@ ikev2_handle_notifies(struct iked *env, struct iked_message *msg)
 	/* Signature hash algorithm */
 	if (msg->msg_flags & IKED_MSG_FLAGS_SIGSHA2)
 		sa->sa_sigsha2 = 1;
+	if (msg->msg_flags & IKED_MSG_FLAGS_USE_TRANSPORT)
+		sa->sa_use_transport_mode = 1;
+
 	return (0);
 }
 
@@ -2947,6 +2956,7 @@ ikev2_handle_certreq(struct iked* env, struct iked_message *msg)
 {
 	struct iked_certreq	*cr;
 	struct iked_sa		*sa;
+	uint8_t more;
 
 	if ((sa = msg->msg_sa) == NULL)
 		return (-1);
@@ -2961,8 +2971,13 @@ ikev2_handle_certreq(struct iked* env, struct iked_message *msg)
 		else
 			sa->sa_statevalid |= IKED_REQ_CERT;
 
+		if (SLIST_NEXT(cr, cr_entry) != NULL)
+			more = 1;
+		else
+			more = 0;
+
 		ca_setreq(env, sa, &sa->sa_policy->pol_localid, cr->cr_type,
-		    ibuf_data(cr->cr_data),
+		    more, ibuf_data(cr->cr_data),
 		    ibuf_length(cr->cr_data),
 		    PROC_CERT);
 
