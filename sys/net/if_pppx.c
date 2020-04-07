@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_pppx.c,v 1.78 2020/04/01 07:15:59 mpi Exp $ */
+/*	$OpenBSD: if_pppx.c,v 1.81 2020/04/07 07:11:22 claudio Exp $ */
 
 /*
  * Copyright (c) 2010 Claudio Jeker <claudio@openbsd.org>
@@ -175,6 +175,12 @@ int		pppx_add_session(struct pppx_dev *,
 		    struct pipex_session_req *);
 int		pppx_del_session(struct pppx_dev *,
 		    struct pipex_session_close_req *);
+int		pppx_config_session(struct pppx_dev *,
+		    struct pipex_session_config_req *);
+int		pppx_get_stat(struct pppx_dev *,
+		    struct pipex_session_stat_req *);
+int		pppx_get_closed(struct pppx_dev *,
+		    struct pipex_session_list_req *);
 int		pppx_set_session_descr(struct pppx_dev *,
 		    struct pipex_session_descr_req *);
 
@@ -451,16 +457,18 @@ pppxioctl(dev_t dev, u_long cmd, caddr_t addr, int flags, struct proc *p)
 		break;
 
 	case PIPEXCSESSION:
-		error = pipex_config_session(
+		error = pppx_config_session(pxd,
 		    (struct pipex_session_config_req *)addr);
 		break;
 
 	case PIPEXGSTAT:
-		error = pipex_get_stat((struct pipex_session_stat_req *)addr);
+		error = pppx_get_stat(pxd,
+		    (struct pipex_session_stat_req *)addr);
 		break;
 
 	case PIPEXGCLOSED:
-		error = pipex_get_closed((struct pipex_session_list_req *)addr);
+		error = pppx_get_closed(pxd,
+		    (struct pipex_session_list_req *)addr);
 		break;
 
 	case PIPEXSIFDESCR:
@@ -711,9 +719,12 @@ pppx_add_session(struct pppx_dev *pxd, struct pipex_session_req *req)
 		return (EPROTONOSUPPORT);
 	}
 
+	session = pipex_lookup_by_session_id(req->pr_protocol,
+	    req->pr_session_id);
+	if (session)
+		return (EEXIST);
+
 	pxi = pool_get(pppx_if_pl, PR_WAITOK | PR_ZERO);
-	if (pxi == NULL)
-		return (ENOMEM);
 
 	session = &pxi->pxi_session;
 	ifp = &pxi->pxi_if;
@@ -945,6 +956,40 @@ pppx_del_session(struct pppx_dev *pxd, struct pipex_session_close_req *req)
 
 	pppx_if_destroy(pxd, pxi);
 	return (0);
+}
+
+int
+pppx_config_session(struct pppx_dev *pxd,
+    struct pipex_session_config_req *req)
+{
+	struct pppx_if *pxi;
+
+	pxi = pppx_if_find(pxd, req->pcr_session_id, req->pcr_protocol);
+	if (pxi == NULL)
+		return (EINVAL);
+
+	return pipex_config_session(req, &pxi->pxi_ifcontext);
+}
+
+int
+pppx_get_stat(struct pppx_dev *pxd, struct pipex_session_stat_req *req)
+{
+	struct pppx_if *pxi;
+
+	pxi = pppx_if_find(pxd, req->psr_session_id, req->psr_protocol);
+	if (pxi == NULL)
+		return (EINVAL);
+
+	return pipex_get_stat(req, &pxi->pxi_ifcontext);
+}
+
+int
+pppx_get_closed(struct pppx_dev *pxd, struct pipex_session_list_req *req)
+{
+	/* XXX: Only opened sessions exist for pppx(4) */
+	memset(req, 0, sizeof(*req));
+
+	return 0;
 }
 
 int
