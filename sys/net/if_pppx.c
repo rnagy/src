@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_pppx.c,v 1.81 2020/04/07 07:11:22 claudio Exp $ */
+/*	$OpenBSD: if_pppx.c,v 1.83 2020/04/10 07:36:52 mpi Exp $ */
 
 /*
  * Copyright (c) 2010 Claudio Jeker <claudio@openbsd.org>
@@ -537,7 +537,7 @@ pppxkqfilter(dev_t dev, struct knote *kn)
 	kn->kn_hook = (caddr_t)pxd;
 
 	mtx_enter(mtx);
-	SLIST_INSERT_HEAD(klist, kn, kn_selnext);
+	klist_insert(klist, kn);
 	mtx_leave(mtx);
 
 	return (0);
@@ -550,7 +550,7 @@ filt_pppx_rdetach(struct knote *kn)
 	struct klist *klist = &pxd->pxd_rsel.si_note;
 
 	mtx_enter(&pxd->pxd_rsel_mtx);
-	SLIST_REMOVE(klist, kn, knote, kn_selnext);
+	klist_remove(klist, kn);
 	mtx_leave(&pxd->pxd_rsel_mtx);
 }
 
@@ -571,7 +571,7 @@ filt_pppx_wdetach(struct knote *kn)
 	struct klist *klist = &pxd->pxd_wsel.si_note;
 
 	mtx_enter(&pxd->pxd_wsel_mtx);
-	SLIST_REMOVE(klist, kn, knote, kn_selnext);
+	klist_remove(klist, kn);
 	mtx_leave(&pxd->pxd_wsel_mtx);
 }
 
@@ -643,20 +643,20 @@ pppx_if_next_unit(void)
 struct pppx_if *
 pppx_if_find(struct pppx_dev *pxd, int session_id, int protocol)
 {
-	struct pppx_if *s, *p;
-	s = malloc(sizeof(*s), M_DEVBUF, M_WAITOK | M_ZERO);
+	struct pppx_if_key key;
+	struct pppx_if *pxi;
 
-	s->pxi_key.pxik_session_id = session_id;
-	s->pxi_key.pxik_protocol = protocol;
+	memset(&key, 0, sizeof(key));
+	key.pxik_session_id = session_id;
+	key.pxik_protocol = protocol;
 
 	rw_enter_read(&pppx_ifs_lk);
-	p = RBT_FIND(pppx_ifs, &pppx_ifs, s);
-	if (p && p->pxi_ready == 0)
-		p = NULL;
+	pxi = RBT_FIND(pppx_ifs, &pppx_ifs, (struct pppx_if *)&key);
+	if (pxi && pxi->pxi_ready == 0)
+		pxi = NULL;
 	rw_exit_read(&pppx_ifs_lk);
 
-	free(s, M_DEVBUF, sizeof(*s));
-	return (p);
+	return pxi;
 }
 
 int
@@ -1496,7 +1496,7 @@ pppackqfilter(dev_t dev, struct knote *kn)
 	kn->kn_hook = sc;
 
 	mtx_enter(mtx);
-	SLIST_INSERT_HEAD(klist, kn, kn_selnext);
+	klist_insert(klist, kn);
 	mtx_leave(mtx);
 
 	return (0);
@@ -1509,7 +1509,7 @@ filt_pppac_rdetach(struct knote *kn)
 	struct klist *klist = &sc->sc_rsel.si_note;
 
 	mtx_enter(&sc->sc_rsel_mtx);
-	SLIST_REMOVE(klist, kn, knote, kn_selnext);
+	klist_remove(klist, kn);
 	mtx_leave(&sc->sc_rsel_mtx);
 }
 
@@ -1530,7 +1530,7 @@ filt_pppac_wdetach(struct knote *kn)
 	struct klist *klist = &sc->sc_wsel.si_note;
 
 	mtx_enter(&sc->sc_wsel_mtx);
-	SLIST_REMOVE(klist, kn, knote, kn_selnext);
+	klist_remove(klist, kn);
 	mtx_leave(&sc->sc_wsel_mtx);
 }
 

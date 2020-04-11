@@ -1,4 +1,4 @@
-/* $OpenBSD: format.c,v 1.232 2020/03/31 11:58:05 nicm Exp $ */
+/* $OpenBSD: format.c,v 1.235 2020/04/09 15:35:27 nicm Exp $ */
 
 /*
  * Copyright (c) 2011 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -741,6 +741,21 @@ format_cb_current_command(struct format_tree *ft, struct format_entry *fe)
 	free(cmd);
 }
 
+/* Callback for pane_current_path. */
+static void
+format_cb_current_path(struct format_tree *ft, struct format_entry *fe)
+{
+	struct window_pane	*wp = ft->wp;
+	char			*cwd;
+
+	if (wp == NULL)
+		return;
+
+	cwd = get_proc_cwd(wp->fd);
+	if (cwd != NULL)
+		fe->value = xstrdup(cwd);
+}
+
 /* Callback for history_bytes. */
 static void
 format_cb_history_bytes(struct format_tree *ft, struct format_entry *fe)
@@ -885,11 +900,12 @@ static void
 format_cb_pane_at_top(struct format_tree *ft, struct format_entry *fe)
 {
 	struct window_pane	*wp = ft->wp;
-	struct window		*w = wp->window;
+	struct window		*w;
 	int			 status, flag;
 
 	if (wp == NULL)
 		return;
+	w = wp->window;
 
 	status = options_get_number(w->options, "pane-border-status");
 	if (status == PANE_STATUS_TOP)
@@ -904,11 +920,12 @@ static void
 format_cb_pane_at_bottom(struct format_tree *ft, struct format_entry *fe)
 {
 	struct window_pane	*wp = ft->wp;
-	struct window		*w = wp->window;
+	struct window		*w;
 	int			 status, flag;
 
 	if (wp == NULL)
 		return;
+	w = wp->window;
 
 	status = options_get_number(w->options, "pane-border-status");
 	if (status == PANE_STATUS_BOTTOM)
@@ -1600,7 +1617,7 @@ format_build_modifiers(struct format_tree *ft, const char **s, u_int *count)
 		return (NULL);
 	}
 	*s = cp + 1;
-	return list;
+	return (list);
 }
 
 /* Match against an fnmatch(3) pattern or regular expression. */
@@ -1892,7 +1909,7 @@ format_replace_expression(struct format_modifier *mexp, struct format_tree *ft,
 
 	free(right);
 	free(left);
-	return value;
+	return (value);
 
 fail:
 	free(right);
@@ -2722,6 +2739,7 @@ format_defaults_pane(struct format_tree *ft, struct window_pane *wp)
 	format_add(ft, "pane_pid", "%ld", (long) wp->pid);
 	format_add_cb(ft, "pane_start_command", format_cb_start_command);
 	format_add_cb(ft, "pane_current_command", format_cb_current_command);
+	format_add_cb(ft, "pane_current_path", format_cb_current_path);
 
 	format_add(ft, "cursor_x", "%u", wp->base.cx);
 	format_add(ft, "cursor_y", "%u", wp->base.cy);

@@ -1,4 +1,4 @@
-/*	$OpenBSD: ca.c,v 1.56 2020/04/06 20:23:16 tobhe Exp $	*/
+/*	$OpenBSD: ca.c,v 1.59 2020/04/10 20:58:32 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2010-2013 Reyk Floeter <reyk@openbsd.org>
@@ -47,6 +47,7 @@
 #include "ikev2.h"
 
 void	 ca_run(struct privsep *, struct privsep_proc *, void *);
+void	 ca_shutdown(struct privsep_proc *);
 void	 ca_reset(struct privsep *);
 int	 ca_reload(struct iked *);
 
@@ -117,6 +118,23 @@ ca_run(struct privsep *ps, struct privsep_proc *p, void *arg)
 		fatal("%s: failed to allocate cert store", __func__);
 
 	env->sc_priv = store;
+	p->p_shutdown = ca_shutdown;
+}
+
+void
+ca_shutdown(struct privsep_proc *p)
+{
+	struct iked             *env = p->p_env;
+	struct ca_store		*store;
+
+	if (env == NULL)
+		return;
+	ibuf_release(env->sc_certreq);
+	if ((store = env->sc_priv) == NULL)
+		return;
+	ibuf_release(store->ca_pubkey.id_buf);
+	ibuf_release(store->ca_privkey.id_buf);
+	free(store);
 }
 
 void
@@ -329,6 +347,20 @@ ca_setreq(struct iked *env, struct iked_sa *sa,
 	return (ret);
 }
 
+static int
+auth_sig_compatible(uint8_t type)
+{
+	switch (type) {
+	case IKEV2_AUTH_RSA_SIG:
+	case IKEV2_AUTH_ECDSA_256:
+	case IKEV2_AUTH_ECDSA_384:
+	case IKEV2_AUTH_ECDSA_521:
+	case IKEV2_AUTH_SIG_ANY:
+		return (1);
+	}
+	return (0);
+}
+
 int
 ca_setauth(struct iked *env, struct iked_sa *sa,
     struct ibuf *authmsg, enum privsep_procid id)
@@ -340,8 +372,9 @@ ca_setauth(struct iked *env, struct iked_sa *sa,
 
 	if (id == PROC_CERT) {
 		/* switch encoding to IKEV2_AUTH_SIG if SHA2 is supported */
-		if (sa->sa_sigsha2 && type == IKEV2_AUTH_RSA_SIG) {
-			log_debug("%s: switching RSA_SIG to SIG", __func__);
+		if (sa->sa_sigsha2 && auth_sig_compatible(type)) {
+			log_debug("%s: switching %s to SIG", __func__,
+			    print_map(type, ikev2_auth_map));
 			type = IKEV2_AUTH_SIG;
 		} else if (!sa->sa_sigsha2 && type == IKEV2_AUTH_SIG_ANY) {
 			log_debug("%s: switching SIG to RSA_SIG(*)", __func__);
@@ -603,6 +636,7 @@ ca_getauth(struct iked *env, struct imsg *imsg)
 	ret = ca_setauth(env, &sa, sa.sa_localauth.id_buf, PROC_IKEV2);
 
 	ibuf_release(sa.sa_localauth.id_buf);
+	sa.sa_localauth.id_buf = NULL;
 	ibuf_release(authmsg);
 
 	return (ret);
@@ -1341,7 +1375,7 @@ ca_validate_pubkey(struct iked *env, struct iked_static_id *id,
 		}
 	}
 
-	lc_string(idstr);
+	lc_idtype(idstr);
 	if (strlcpy(file, IKED_PUBKEY_DIR, sizeof(file)) >= sizeof(file) ||
 	    strlcat(file, idstr, sizeof(file)) >= sizeof(file)) {
 		log_debug("%s: public key id too long %s", __func__, idstr);

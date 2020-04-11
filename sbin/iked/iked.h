@@ -1,4 +1,4 @@
-/*	$OpenBSD: iked.h,v 1.140 2020/04/02 19:44:41 tobhe Exp $	*/
+/*	$OpenBSD: iked.h,v 1.143 2020/04/10 20:58:32 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -647,7 +647,7 @@ struct privsep_proc {
 	const char		*p_chroot;
 	struct privsep		*p_ps;
 	struct iked		*p_env;
-	void			(*p_shutdown)(void);
+	void			(*p_shutdown)(struct privsep_proc *);
 	unsigned int		 p_instance;
 };
 
@@ -661,10 +661,17 @@ TAILQ_HEAD(iked_ocsp_requests, iked_ocsp_entry);
  * Daemon configuration
  */
 
+enum natt_mode {
+	NATT_DEFAULT,	/* send/recv with both :500 and NAT-T port */
+	NATT_DISABLE,	/* send/recv with only :500 */
+	NATT_FORCE,	/* send/recv with only NAT-T port */
+};
+
 struct iked {
 	char				 sc_conffile[PATH_MAX];
 
 	uint32_t			 sc_opts;
+	enum natt_mode			 natt_mode;
 	uint8_t				 sc_passive;
 	uint8_t				 sc_decoupled;
 	in_port_t			 sc_nattport;
@@ -1037,7 +1044,7 @@ const char *
 	 print_spi(uint64_t, int);
 const char *
 	 print_map(unsigned int, struct iked_constmap *);
-void	 lc_string(char *);
+void	 lc_idtype(char *);
 void	 print_hex(const uint8_t *, off_t, size_t);
 void	 print_hexval(const uint8_t *, off_t, size_t);
 const char *

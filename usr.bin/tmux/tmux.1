@@ -1,4 +1,4 @@
-.\" $OpenBSD: tmux.1,v 1.732 2020/04/06 17:51:34 nicm Exp $
+.\" $OpenBSD: tmux.1,v 1.736 2020/04/10 20:53:54 nicm Exp $
 .\"
 .\" Copyright (c) 2007 Nicholas Marriott <nicholas.marriott@gmail.com>
 .\"
@@ -14,7 +14,7 @@
 .\" IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate: April 6 2020 $
+.Dd $Mdocdate: April 10 2020 $
 .Dt TMUX 1
 .Os
 .Sh NAME
@@ -1425,6 +1425,10 @@ This mode is entered with the
 command, bound to
 .Ql \&[
 by default.
+Copied text can be pasted with the
+.Ic paste-buffer
+command, bound to
+.Ql \&] .
 .It
 View mode, which is like copy mode but is entered when a command that produces
 output, such as
@@ -1604,6 +1608,7 @@ command is:
 .Bl -tag -width Ds
 .It Xo Ic copy-mode
 .Op Fl eHMqu
+.Op Fl s Ar src-pane
 .Op Fl t Ar target-pane
 .Xc
 Enter copy mode.
@@ -1617,6 +1622,11 @@ begins a mouse drag (only valid if bound to a mouse key binding, see
 hides the position indicator in the top right.
 .Fl q
 cancels copy mode and any other modes.
+.Fl s
+copies from
+.Ar src-pane
+instead of
+.Ar target-pane .
 .Pp
 .Fl e
 specifies that scrolling to the bottom of the history (to the visible screen)
@@ -4409,6 +4419,7 @@ The following variables are available, where appropriate:
 .It Li "pane_at_top" Ta "" Ta "1 if pane is at the top of window"
 .It Li "pane_bottom" Ta "" Ta "Bottom of pane"
 .It Li "pane_current_command" Ta "" Ta "Current command if available"
+.It Li "pane_current_path" Ta "" Ta "Current path if available"
 .It Li "pane_dead" Ta "" Ta "1 if pane is dead"
 .It Li "pane_dead_status" Ta "" Ta "Exit status of process in dead pane"
 .It Li "pane_format" Ta "" Ta "1 if format is for a pane"

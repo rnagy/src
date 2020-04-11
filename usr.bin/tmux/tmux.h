@@ -1,4 +1,4 @@
-/* $OpenBSD: tmux.h,v 1.974 2020/04/06 17:51:34 nicm Exp $ */
+/* $OpenBSD: tmux.h,v 1.980 2020/04/10 20:53:54 nicm Exp $ */
 
 /*
  * Copyright (c) 2007 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -761,6 +761,7 @@ struct screen {
 	u_int			 saved_cy;
 	struct grid		*saved_grid;
 	struct grid_cell	 saved_cell;
+	int			 saved_flags;
 
 	bitstr_t		*tabs;
 	struct screen_sel	*sel;
@@ -842,11 +843,11 @@ struct window_mode {
 	void		 (*formats)(struct window_mode_entry *,
 			     struct format_tree *);
 };
-#define WINDOW_MODE_TIMEOUT 180
 
 /* Active window mode. */
 struct window_mode_entry {
 	struct window_pane		*wp;
+	struct window_pane		*swp;
 
 	const struct window_mode	*mode;
 	void				*data;
@@ -1994,6 +1995,7 @@ int	tty_init(struct tty *, struct client *, int, char *);
 void	tty_resize(struct tty *);
 void	tty_set_size(struct tty *, u_int, u_int, u_int, u_int);
 void	tty_start_tty(struct tty *);
+void	tty_send_requests(struct tty *);
 void	tty_stop_tty(struct tty *);
 void	tty_set_title(struct tty *, const char *);
 void	tty_update_mode(struct tty *, int, struct screen *);
@@ -2467,7 +2469,6 @@ void	 screen_select_cell(struct screen *, struct grid_cell *,
 void	 screen_alternate_on(struct screen *, struct grid_cell *, int);
 void	 screen_alternate_off(struct screen *, struct grid_cell *, int);
 
-
 /* window.c */
 extern struct windows windows;
 extern struct window_pane_tree all_window_panes;
@@ -2536,8 +2537,8 @@ void		 window_pane_unset_palette(struct window_pane *, u_int);
 void		 window_pane_reset_palette(struct window_pane *);
 int		 window_pane_get_palette(struct window_pane *, int);
 int		 window_pane_set_mode(struct window_pane *,
-		     const struct window_mode *, struct cmd_find_state *,
-		     struct args *);
+		     struct window_pane *, const struct window_mode *,
+		     struct cmd_find_state *, struct args *);
 void		 window_pane_reset_mode(struct window_pane *);
 void		 window_pane_reset_mode_all(struct window_pane *);
 int		 window_pane_key(struct window_pane *, struct client *,
@@ -2742,6 +2743,7 @@ int		 utf8_cstrhas(const char *, const struct utf8_data *);
 
 /* procname.c */
 char   *get_proc_name(int, char *);
+char   *get_proc_cwd(int);
 
 /* log.c */
 void	log_add_level(void);

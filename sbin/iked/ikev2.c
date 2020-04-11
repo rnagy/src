@@ -1,4 +1,4 @@
-/*	$OpenBSD: ikev2.c,v 1.211 2020/04/05 13:52:14 tobhe Exp $	*/
+/*	$OpenBSD: ikev2.c,v 1.213 2020/04/09 19:55:19 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -55,6 +55,7 @@ void	 ikev2_log_proposal(struct iked_sa *, struct iked_proposals *);
 void	 ikev2_log_cert_info(const char *, struct iked_id *);
 
 void	 ikev2_run(struct privsep *, struct privsep_proc *, void *);
+void	 ikev2_shutdown(struct privsep_proc *);
 int	 ikev2_dispatch_parent(int, struct privsep_proc *, struct imsg *);
 int	 ikev2_dispatch_cert(int, struct privsep_proc *, struct imsg *);
 int	 ikev2_dispatch_control(int, struct privsep_proc *, struct imsg *);
@@ -189,8 +190,18 @@ ikev2_run(struct privsep *ps, struct privsep_proc *p, void *arg)
 	 * recvfd - for PFKEYv2 and the listening UDP sockets.
 	 * In theory, recvfd could be dropped after getting the fds once.
 	 */
+	p->p_shutdown = ikev2_shutdown;
 	if (pledge("stdio inet recvfd", NULL) == -1)
 		fatal("pledge");
+}
+
+void
+ikev2_shutdown(struct privsep_proc *p)
+{
+	struct iked		*env = p->p_env;
+
+	ibuf_release(env->sc_certreq);
+	env->sc_certreq = NULL;
 }
 
 int
@@ -1147,7 +1158,7 @@ ikev2_init_ike_sa_peer(struct iked *env, struct iked_policy *pol,
 			goto done;
 	}
 
-	if ((env->sc_opts & IKED_OPT_NONATT) == 0) {
+	if (env->natt_mode != NATT_DISABLE) {
 		if (ntohs(port) == env->sc_nattport) {
 			/* Enforce NAT-T on the initiator side */
 			log_debug("%s: enforcing NAT-T", __func__);
@@ -1964,7 +1975,7 @@ ikev2_nat_detection(struct iked *env, struct iked_message *msg,
 		goto done;
 	}
 
-	if (env->sc_opts & IKED_OPT_NATT) {
+	if (env->natt_mode == NATT_FORCE) {
 		/* Enforce NAT-T/UDP-encapsulation by distorting the digest */
 		rnd = arc4random();
 		EVP_DigestUpdate(&ctx, &rnd, sizeof(rnd));
@@ -2707,7 +2718,7 @@ ikev2_resp_ike_sa_init(struct iked *env, struct iked_message *msg)
 			goto done;
 	}
 
-	if ((env->sc_opts & IKED_OPT_NONATT) == 0 &&
+	if ((env->natt_mode != NATT_DISABLE) &&
 	    msg->msg_local.ss_family != AF_UNSPEC) {
 		if ((len = ikev2_add_nat_detection(env, buf, &pld, &resp, len))
 		    == -1)
