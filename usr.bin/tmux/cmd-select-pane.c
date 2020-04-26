@@ -1,4 +1,4 @@
-/* $OpenBSD: cmd-select-pane.c,v 1.55 2020/04/13 08:26:27 nicm Exp $ */
+/* $OpenBSD: cmd-select-pane.c,v 1.59 2020/04/13 20:51:57 nicm Exp $ */
 
 /*
  * Copyright (c) 2009 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -85,13 +85,13 @@ cmd_select_pane_exec(struct cmd *self, struct cmdq_item *item)
 {
 	struct args		*args = cmd_get_args(self);
 	const struct cmd_entry	*entry = cmd_get_entry(self);
-	struct cmd_find_state	*current = &item->shared->current;
-	struct client		*c = cmd_find_client(item, NULL, 1);
-	struct winlink		*wl = item->target.wl;
+	struct cmd_find_state	*current = cmdq_get_current(item);
+	struct cmd_find_state	*target = cmdq_get_target(item);
+	struct winlink		*wl = target->wl;
 	struct window		*w = wl->window;
-	struct session		*s = item->target.s;
-	struct window_pane	*wp = item->target.wp, *lastwp, *markedwp;
-	char			*pane_title;
+	struct session		*s = target->s;
+	struct window_pane	*wp = target->wp, *lastwp, *markedwp;
+	char			*title;
 	const char		*style;
 	struct style		*sy;
 	struct options_entry	*o;
@@ -196,11 +196,10 @@ cmd_select_pane_exec(struct cmd *self, struct cmdq_item *item)
 	}
 
 	if (args_has(args, 'T')) {
-		pane_title = format_single(item, args_get(args, 'T'),
-		    c, s, wl, wp);
-		if (screen_set_title(&wp->base, pane_title))
+		title = format_single_from_target(item, args_get(args, 'T'));
+		if (screen_set_title(&wp->base, title))
 			server_status_window(wp->window);
-		free(pane_title);
+		free(title);
 		return (CMD_RETURN_NORMAL);
 	}
 

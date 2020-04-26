@@ -1,4 +1,4 @@
-/*	$OpenBSD: if_iwn.c,v 1.222 2020/04/09 07:20:08 stsp Exp $	*/
+/*	$OpenBSD: if_iwn.c,v 1.225 2020/04/21 10:34:24 stsp Exp $	*/
 
 /*-
  * Copyright (c) 2007-2010 Damien Bergamini <damien.bergamini@free.fr>
@@ -2259,7 +2259,6 @@ void
 iwn_rx_compressed_ba(struct iwn_softc *sc, struct iwn_rx_desc *desc,
     struct iwn_rx_data *data)
 {
-	struct iwn_ops *ops = &sc->ops;
 	struct iwn_compressed_ba *cba = (struct iwn_compressed_ba *)(desc + 1);
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct ieee80211_node *ni;
@@ -2322,9 +2321,9 @@ iwn_rx_compressed_ba(struct iwn_softc *sc, struct iwn_rx_desc *desc,
 		idx = IWN_AGG_SSN_TO_TXQ_IDX(ssn);
 		while (nsent && idx != end_idx) {
 			struct iwn_tx_data *txdata = &txq->data[idx];
-			int have_ack = (le64toh(cba->bitmap) & (1 << bit++));
+			int have_ack = (le64toh(cba->bitmap) & (1 << bit));
 
-			if (txdata->m != NULL) {
+			if ((ba->ba_bitmap & (1 << bit)) == 0) {
 				/*
 				 * Don't report frames to MiRA which were sent
 				 * at a different Tx rate than ni->ni_txmcs.
@@ -2339,18 +2338,15 @@ iwn_rx_compressed_ba(struct iwn_softc *sc, struct iwn_rx_desc *desc,
 					if (!have_ack || txdata->txfail > 0)
 						wn->mn.txfail++;
 				}
-				if (have_ack) {
+				if (have_ack)
 					ieee80211_output_ba_record_ack(ic,
 					    ni, cba->tid, ssn);
-					ops->reset_sched(sc, qid, idx);
-					iwn_tx_done_free_txdata(sc, txdata);
-					txq->queued--;
-				}
 			}
 
 			idx = (idx + 1) % IWN_TX_RING_COUNT;
 			ssn = (ssn + 1) % 0xfff;
 			nsent--;
+			bit++;
 		}
 
 		if (wn->mn.ampdu_size > 0)
@@ -3426,8 +3422,17 @@ iwn_tx(struct iwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 			flags |= IWN_TX_NEED_ACK;
 	}
 	if (type == IEEE80211_FC0_TYPE_CTL &&
-	    subtype == IEEE80211_FC0_SUBTYPE_BAR)
+	    subtype == IEEE80211_FC0_SUBTYPE_BAR) {
+		struct ieee80211_frame_min *mwh;
+		uint8_t *barfrm;
+		uint16_t ctl;
+		mwh = mtod(m, struct ieee80211_frame_min *);
+		barfrm = (uint8_t *)&mwh[1];
+		ctl = LE_READ_2(barfrm);
+		tid = (ctl & IEEE80211_BA_TID_INFO_MASK) >>
+		    IEEE80211_BA_TID_INFO_SHIFT;
 		flags |= (IWN_TX_NEED_ACK | IWN_TX_IMM_BA);
+	}
 
 	if (wh->i_fc[1] & IEEE80211_FC1_MORE_FRAG)
 		flags |= IWN_TX_MORE_FRAG;	/* Cannot happen yet. */
@@ -3508,10 +3513,12 @@ iwn_tx(struct iwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	else
 		tx->rflags = rinfo->flags;
 	/*
-	 * Skip rate control if our Tx rate is fixed.
-	 * Keep the Tx rate constant while mira is probing.
+	 * Keep the Tx rate constant while mira is probing, or if this is
+	 * an aggregation queue in which case a fixed Tx rate works around
+	 * FIFO_UNDERRUN Tx errors.
 	 */
 	if (tx->id == sc->broadcast_id || ieee80211_mira_is_probing(&wn->mn) ||
+	    qid >= sc->first_agg_txq ||
 	    ic->ic_fixed_mcs != -1 || ic->ic_fixed_rate != -1) {
 		/* Group or management frame, or probing, or fixed Tx rate. */
 		tx->linkq = 0;
