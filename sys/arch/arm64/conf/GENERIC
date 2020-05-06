@@ -1,4 +1,4 @@
-# $OpenBSD: GENERIC,v 1.161 2020/04/25 22:28:12 kettenis Exp $
+# $OpenBSD: GENERIC,v 1.164 2020/04/27 21:31:37 patrick Exp $
 #
 # GENERIC machine description file
 #
@@ -133,6 +133,7 @@ iic*		at imxiic?
 bdpmic*		at iic?
 imxesdhc*	at fdt?
 sdmmc*		at imxesdhc?
+imxpciephy*	at fdt?
 imxpwm*		at fdt?
 imxspi*		at fdt?
 ssdfb*		at iic?
@@ -148,6 +149,7 @@ bcmclock*	at fdt? early 1
 bcmdmac*	at fdt? early 1
 bcmdog*		at fdt?
 bcmgpio*	at fdt? early 1
+gpio*		at bcmgpio?
 bcmintc*	at fdt? early 1
 bcmirng*	at fdt?
 bcmmbox*	at fdt? early 1
@@ -425,6 +427,7 @@ pcfrtc*		at iic?			# PCF8523 RTC
 pcxrtc*		at iic?			# PCF8563 RTC
 rkpmic*		at iic?			# RK808 PMIC
 sypwr*		at iic?			# SY8106A regulator
+tcpci*		at iic?			# USB Type-C controller
 
 # GPIO "pin bus" drivers
 gpioiic*	at gpio?		# I2C bus bit-banging

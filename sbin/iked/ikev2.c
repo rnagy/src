@@ -1,4 +1,4 @@
-/*	$OpenBSD: ikev2.c,v 1.220 2020/04/24 21:20:52 tobhe Exp $	*/
+/*	$OpenBSD: ikev2.c,v 1.223 2020/05/02 13:01:37 tobhe Exp $	*/
 
 /*
  * Copyright (c) 2019 Tobias Heider <tobias.heider@stusta.de>
@@ -113,7 +113,7 @@ int	 ikev2_sa_initiator(struct iked *, struct iked_sa *,
 int	 ikev2_sa_responder(struct iked *, struct iked_sa *, struct iked_sa *,
 	    struct iked_message *);
 int	 ikev2_sa_initiator_dh(struct iked_sa *, struct iked_message *,
-	    unsigned int);
+	    unsigned int, struct iked_sa *);
 int	 ikev2_sa_responder_dh(struct iked_kex *, struct iked_proposals *,
 	    struct iked_message *, unsigned int);
 void	 ikev2_sa_cleanup_dh(struct iked_sa *);
@@ -508,10 +508,9 @@ ikev2_getimsgdata(struct iked *env, struct imsg *imsg, struct iked_sahdr *sh,
 static time_t
 gettime(void)
 {
-	struct timespec ts;
-	if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1)
-		return (-1);
-	return ts.tv_sec;
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return tv.tv_sec;
 }
 
 void
@@ -3425,7 +3424,7 @@ ikev2_send_create_child_sa(struct iked *env, struct iked_sa *sa,
 	    protoid)) {
 		log_debug("%s: enable PFS", __func__);
 		ikev2_sa_cleanup_dh(sa);
-		if (ikev2_sa_initiator_dh(sa, NULL, protoid) < 0) {
+		if (ikev2_sa_initiator_dh(sa, NULL, protoid, NULL) < 0) {
 			log_debug("%s: failed to setup DH", __func__);
 			goto done;
 		}
@@ -3746,7 +3745,7 @@ ikev2_init_create_child_sa(struct iked *env, struct iked_message *msg)
 	/* check KE payload for PFS */
 	if (ibuf_length(msg->msg_ke)) {
 		log_debug("%s: using PFS", __func__);
-		if (ikev2_sa_initiator_dh(sa, msg, prop->prop_protoid) < 0) {
+		if (ikev2_sa_initiator_dh(sa, msg, prop->prop_protoid, NULL) < 0) {
 			log_debug("%s: failed to setup DH", __func__);
 			return (ret);
 		}
@@ -3899,6 +3898,10 @@ ikev2_ikesa_enable(struct iked *env, struct iked_sa *sa, struct iked_sa *nsa)
 	}
 
 	/* Preserve ID information */
+	ibuf_release(nsa->sa_iid.id_buf);
+	ibuf_release(nsa->sa_rid.id_buf);
+	ibuf_release(nsa->sa_icert.id_buf);
+	ibuf_release(nsa->sa_rcert.id_buf);
 	if (sa->sa_hdr.sh_initiator == nsa->sa_hdr.sh_initiator) {
 		nsa->sa_iid = sa->sa_iid;
 		nsa->sa_rid = sa->sa_rid;
@@ -4545,13 +4548,16 @@ ikev2_psk(struct iked_sa *sa, uint8_t *data, size_t length,
 
 int
 ikev2_sa_initiator_dh(struct iked_sa *sa, struct iked_message *msg,
-    unsigned int proto)
+    unsigned int proto, struct iked_sa *osa)
 {
 	struct iked_policy	*pol = sa->sa_policy;
 	struct iked_transform	*xform;
+	struct iked_proposals	*proposals;
+
+	proposals = osa ? &osa->sa_proposals : &pol->pol_proposals;
 
 	if (sa->sa_dhgroup == NULL) {
-		if ((xform = config_findtransform(&pol->pol_proposals,
+		if ((xform = config_findtransform(proposals,
 		    IKEV2_XFORMTYPE_DH, proto)) == NULL) {
 			log_debug("%s: did not find dh transform", __func__);
 			return (-1);
@@ -4609,7 +4615,7 @@ ikev2_sa_initiator(struct iked *env, struct iked_sa *sa,
 {
 	struct iked_transform	*xform;
 
-	if (ikev2_sa_initiator_dh(sa, msg, 0) < 0)
+	if (ikev2_sa_initiator_dh(sa, msg, 0, osa) < 0)
 		return (-1);
 
 	if (!ibuf_length(sa->sa_inonce)) {
